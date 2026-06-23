@@ -1,0 +1,38 @@
+# Build output and package caches
+**/bin/
+**/obj/
+**/node_modules/
+**/.angular/
+**/dist/
+coverage/
+*.lcov
+
+# Application data, databases, and generated logs
+backend/Api/App_Data/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.log
+
+# Local configuration and secrets (keep templates such as .env.example)
+.env
+.env.*
+!.env.example
+appsettings.*.local.json
+secrets.json
+
+# Visual Studio, VS Code, and user-specific project files
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.rsuser
+*.DotSettings.user
+
+# OS files
+.DS_Store
+Thumbs.db

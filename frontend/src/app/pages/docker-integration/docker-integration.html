@@ -1,0 +1,168 @@
+<section class="page-header">
+  <div>
+    <h1>Docker Integration - {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }}</h1>
+    <p>Export workflow snapshots from a running n8n container into <code>{{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</code>.</p>
+  </div>
+  <button class="button" type="button" (click)="loadConfig()">Reload settings</button>
+</section>
+
+<section class="alert danger docker-warning">
+  To export workflows from a Docker container, this app may need access to the Docker CLI or Docker socket. Mounting <code>/var/run/docker.sock</code> gives this app high privileges on the host. Use this only on trusted self-hosted servers.
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (message()) {
+  <div class="alert">{{ message() }}</div>
+}
+
+<section class="split docker-layout">
+  <div class="panel">
+    <header>
+      <h2>Environment Docker Settings</h2>
+      <span class="status" [class.on]="form.dockerEnabled">{{ form.dockerEnabled ? 'enabled' : 'disabled' }}</span>
+    </header>
+
+    <div class="form-grid docker-form-grid">
+      <label class="check-line">
+        <input type="checkbox" [(ngModel)]="form.dockerEnabled" />
+        <span>Enable Docker integration</span>
+      </label>
+      <label>
+        <span>Container name</span>
+        <input [(ngModel)]="form.containerName" placeholder="n8n" />
+      </label>
+      <label>
+        <span>n8n CLI command</span>
+        <input [(ngModel)]="form.n8nCliCommand" placeholder="n8n" />
+      </label>
+      <label>
+        <span>Container temp path</span>
+        <input [(ngModel)]="form.tempContainerPath" placeholder="/tmp/n8nmm-workflows.json" />
+      </label>
+      <label>
+        <span>Host temp import path</span>
+        <input [(ngModel)]="form.tempHostImportPath" placeholder="Leave empty for app temp folder" />
+      </label>
+    </div>
+
+    <div class="actions wrap-actions">
+      <button class="button primary" type="button" (click)="save()" [disabled]="saving()">
+        {{ saving() ? 'Saving...' : 'Save settings' }}
+      </button>
+      <button class="button" type="button" (click)="test()" [disabled]="testing() || saving()">
+        {{ testing() ? 'Testing...' : 'Test connection' }}
+      </button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header>
+      <h2>Docker Status</h2>
+      <span class="status" [class.on]="status()?.available">{{ status()?.available ? 'available' : 'unavailable' }}</span>
+    </header>
+
+    @if (loadingStatus()) {
+      <div class="alert loading-alert"><span class="spinner"></span> Checking Docker CLI...</div>
+    } @else if (status()) {
+      <dl class="result-grid docker-result-grid">
+        <div>
+          <dt>Status</dt>
+          <dd>{{ status()?.message }}</dd>
+        </div>
+        <div>
+          <dt>Version</dt>
+          <dd>{{ status()?.version ?? 'Not detected' }}</dd>
+        </div>
+      </dl>
+      <button class="button" type="button" (click)="loadStatus()">Refresh status</button>
+    }
+  </div>
+</section>
+
+<section class="panel stack-top">
+  <header>
+    <div>
+      <h2>Manual Export from Container</h2>
+      <p class="empty">The export imports a snapshot into this environment branch only. Production promotion still requires review and the Merge Assistant.</p>
+    </div>
+    <button class="button primary" type="button" (click)="exportNow()" [disabled]="exporting() || !form.dockerEnabled">
+      {{ exporting() ? 'Exporting...' : 'Export workflows now' }}
+    </button>
+  </header>
+</section>
+
+@if (testResult()) {
+  <section class="panel stack-top">
+    <h2>Docker Test Result</h2>
+    <dl class="result-grid">
+      <div>
+        <dt>Status</dt>
+        <dd>{{ testResult()?.status }}</dd>
+      </div>
+      <div>
+        <dt>Container</dt>
+        <dd>{{ testResult()?.containerName }}</dd>
+      </div>
+    </dl>
+    <pre>{{ testResult()?.logs?.join('\n') }}</pre>
+  </section>
+}
+
+@if (exportResult()) {
+  <section class="panel stack-top">
+    <h2>Export Result</h2>
+    <dl class="result-grid">
+      <div>
+        <dt>Status</dt>
+        <dd>{{ exportResult()?.skippedCommit ? 'No changes detected' : exportResult()?.status }}</dd>
+      </div>
+      <div>
+        <dt>Container</dt>
+        <dd>{{ exportResult()?.containerName }}</dd>
+      </div>
+      <div>
+        <dt>Exported workflows</dt>
+        <dd>{{ exportResult()?.exportedWorkflowsCount }}</dd>
+      </div>
+      <div>
+        <dt>Imported workflows</dt>
+        <dd>{{ exportResult()?.importedWorkflowsCount }}</dd>
+      </div>
+      <div>
+        <dt>Changed files</dt>
+        <dd>{{ exportResult()?.changedFilesCount }}</dd>
+      </div>
+      <div>
+        <dt>Credential references scanned</dt>
+        <dd>{{ exportResult()?.credentialReferencesScanned }}</dd>
+      </div>
+      <div>
+        <dt>Commit SHA</dt>
+        <dd>{{ exportResult()?.commitSha ?? 'No commit created' }}</dd>
+      </div>
+      <div>
+        <dt>Duration</dt>
+        <dd>{{ exportResult()?.duration }}</dd>
+      </div>
+    </dl>
+
+    @if (exportResult()?.warnings?.length) {
+      <div class="alert">
+        @for (warning of exportResult()?.warnings; track warning) {
+          <div>{{ warning }}</div>
+        }
+      </div>
+    }
+
+    <div class="actions wrap-actions">
+      @if (exportResult()?.commitSha) {
+        <a class="button" [routerLink]="['/diff', exportResult()?.commitSha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">View commit diff</a>
+      }
+      <a class="button" routerLink="/workflows" [queryParams]="{ environment: api.selectedEnvironmentKey() }">View workflows</a>
+    </div>
+
+    <pre class="stack-top-small">{{ exportResult()?.logs?.join('\n') }}</pre>
+  </section>
+}

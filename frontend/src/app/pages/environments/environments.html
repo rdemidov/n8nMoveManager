@@ -1,0 +1,85 @@
+<section class="page-header">
+  <div>
+    <h1>Environments</h1>
+    <p>Create named environments. Each one owns a Git branch such as <code>env/production-vps</code>.</p>
+  </div>
+</section>
+
+@if (error()) {
+  <app-ui-alert tone="danger">{{ error() }}</app-ui-alert>
+}
+@if (message()) {
+  <app-ui-alert>{{ message() }}</app-ui-alert>
+}
+
+<section class="split wide-left">
+  <app-ui-panel>
+    <header>
+      <h2>{{ editingKey() ? 'Edit environment' : 'New environment' }}</h2>
+      @if (editingKey()) {
+        <button class="button" type="button" (click)="reset()">Cancel</button>
+      }
+    </header>
+    <div class="form-grid">
+      <label>
+        <span>Name</span>
+        <input [(ngModel)]="form.name" placeholder="Production VPS" />
+      </label>
+      <label>
+        <span>Key</span>
+        <input [(ngModel)]="form.key" placeholder="production-vps" />
+      </label>
+      <label>
+        <span>Git branch</span>
+        <input [(ngModel)]="form.gitBranchName" placeholder="env/production-vps" />
+      </label>
+      <label>
+        <span>Description</span>
+        <input [(ngModel)]="form.description" placeholder="Optional notes" />
+      </label>
+    </div>
+    <button class="button primary" type="button" (click)="save()">Save environment</button>
+  </app-ui-panel>
+
+  <app-ui-table class="panel">
+    <header>
+      <h2>Configured environments</h2>
+    </header>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Key</th>
+          <th>Branch</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (environment of environments(); track environment.key) {
+          <tr>
+            <td>
+              <strong>{{ environment.name }}</strong>
+              @if (environment.isDefault) {
+                <span class="status on">default</span>
+              }
+            </td>
+            <td><code>{{ environment.key }}</code></td>
+            <td><code>{{ environment.gitBranchName }}</code></td>
+            <td class="actions">
+              <button class="button" type="button" (click)="edit(environment)">Edit</button>
+              <button class="button danger-text" type="button" (click)="clear(environment)" [disabled]="clearingKey() === environment.key">
+                {{ clearingKey() === environment.key ? 'Clearing...' : 'Clear' }}
+              </button>
+              <button class="button danger-text" type="button" (click)="remove(environment, false)" [disabled]="environment.isDefault">Delete</button>
+              <button class="button danger-text" type="button" (click)="remove(environment, true)" [disabled]="environment.isDefault">Force</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="4">No environments yet.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </app-ui-table>
+</section>

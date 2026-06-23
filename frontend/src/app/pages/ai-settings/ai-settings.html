@@ -1,0 +1,63 @@
+<section class="page-header">
+  <div>
+    <h1>AI Settings</h1>
+    <p>Configure the provider used by AI explanations, promotion summaries, and workflow diff assistance.</p>
+  </div>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (message()) {
+  <div class="alert">{{ message() }}</div>
+}
+
+<section class="panel ai-settings-page">
+  <header>
+    <div>
+      <h2>Provider</h2>
+      <p class="empty">Settings apply globally. Workflow metadata and diff summaries may be sent to this provider when you use AI helper actions.</p>
+    </div>
+    <span class="status" [class.on]="settings()?.enabled && settings()?.hasApiKey">{{ settings()?.enabled ? 'enabled' : 'disabled' }}</span>
+  </header>
+
+  <div class="form-grid ai-settings-form">
+    <label class="check-line">
+      <input type="checkbox" [ngModel]="enabled()" (ngModelChange)="enabled.set($event)" />
+      <span>Enable AI helpers</span>
+    </label>
+    <label>
+      <span>Endpoint</span>
+      <input [ngModel]="endpoint()" (ngModelChange)="endpoint.set($event)" placeholder="https://api.openai.com/v1/chat/completions" />
+    </label>
+    <label>
+      <span>Model</span>
+      <input [ngModel]="model()" (ngModelChange)="model.set($event)" placeholder="gpt-4.1-mini" />
+    </label>
+    <label>
+      <span>API key</span>
+      <input type="password" [ngModel]="apiKey()" (ngModelChange)="apiKey.set($event)" [placeholder]="settings()?.hasApiKey ? 'Stored key unchanged' : 'Required to enable'" />
+    </label>
+  </div>
+
+  <div class="settings-state">
+    <div>
+      <span>Configured model</span>
+      <strong>{{ settings()?.modelName ?? 'Not loaded' }}</strong>
+    </div>
+    <div>
+      <span>Stored key</span>
+      <strong>{{ settings()?.hasApiKey ? 'Available' : 'Missing' }}</strong>
+    </div>
+  </div>
+
+  @if (settings()?.storageWarning) {
+    <p class="empty">{{ settings()?.storageWarning }}</p>
+  }
+
+  <div class="actions stack-top-small">
+    <button class="button primary" type="button" (click)="saveSettings()" [disabled]="loading()">Save settings</button>
+    <button class="button" type="button" (click)="testProvider()" [disabled]="testing() || loading()">Test provider</button>
+    <button class="button" type="button" (click)="loadSettings()" [disabled]="loading()">Reload</button>
+  </div>
+</section>

@@ -1,0 +1,55 @@
+<section class="page-header">
+  <div>
+    <h1>Git History - {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }}</h1>
+    <p>Recent commits for branch <code>{{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</code>.</p>
+  </div>
+  <a class="button" routerLink="/diff/latest" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Latest diff</a>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (loading()) {
+  <div class="alert">Environment changed. Reloading history for <strong>{{ api.selectedEnvironmentKey() }}</strong>...</div>
+}
+
+<section class="panel environment-toolbar">
+  <label>
+    <span>Showing commits for</span>
+    <select [ngModel]="api.selectedEnvironmentKey()" (ngModelChange)="selectEnvironment($event)">
+      @for (environment of api.environments(); track environment.key) {
+        <option [value]="environment.key">{{ environment.name }} ({{ environment.gitBranch }})</option>
+      }
+    </select>
+  </label>
+  <div class="environment-tabs">
+    @for (environment of api.environments(); track environment.key) {
+      <button class="button" type="button" [class.primary]="isSelected(environment)" (click)="selectEnvironment(environment.key)">
+        {{ environment.name }}
+      </button>
+    }
+  </div>
+</section>
+
+<section class="panel">
+  <div class="rows">
+    @for (commit of commits(); track commit.sha) {
+      <div class="row commit-row">
+        <div>
+          <strong>{{ commit.shortSha }}</strong>
+          <span>{{ commit.message }}</span>
+          <small>{{ commit.authorName }} &lt;{{ commit.authorEmail }}&gt;</small>
+          <small>Environment: {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }} - Branch: {{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</small>
+        </div>
+        <div class="commit-actions">
+          <span>{{ commit.when | date: 'medium' }}</span>
+          <a class="button" [routerLink]="['/commits', commit.sha, 'files']" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Files</a>
+          <a class="button" [routerLink]="['/restore/preview', commit.sha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Restore preview</a>
+          <a class="button" [routerLink]="['/diff', commit.sha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Diff</a>
+        </div>
+      </div>
+    } @empty {
+      <p class="empty">No commits yet. Upload a workflow to create the first commit.</p>
+    }
+  </div>
+</section>

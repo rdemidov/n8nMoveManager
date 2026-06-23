@@ -1,0 +1,129 @@
+<section class="page-header">
+  <div>
+    <h1>Upload Workflows - {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }}</h1>
+    <p>Files will be imported into <code>{{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</code>. Add a commit message now, or generate one from the diff after upload.</p>
+  </div>
+</section>
+
+<section class="panel upload-commit-panel">
+  <div class="upload-panel">
+    <label class="file-drop">
+      <input type="file" accept=".json,application/json" multiple (change)="onFilesSelected($event)" />
+      <span>Choose JSON files</span>
+      <small>
+        @if (selectedFiles()?.length) {
+          {{ selectedFiles()?.length }} file(s) selected
+        } @else {
+          Single workflow objects and arrays are supported by the API.
+        }
+      </small>
+    </label>
+  </div>
+
+  <label class="commit-message-field">
+    <span>Commit message</span>
+    <textarea [ngModel]="commitMessage()" (ngModelChange)="commitMessage.set($event)" rows="3" placeholder="Import updated workflow exports"></textarea>
+    <small>Leave empty to use the default timestamped import message. You can amend the new commit after AI reviews the diff.</small>
+  </label>
+
+  <button class="button primary" type="button" (click)="upload()" [disabled]="uploading()">
+    {{ uploading() ? 'Uploading...' : 'Import and commit' }}
+  </button>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (message()) {
+  <div class="alert upload-success-alert">
+    <span>{{ message() }}</span>
+    @if (result()?.commitSha) {
+      <a class="button" [routerLink]="['/diff', result()?.commitSha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">View commit diff</a>
+      <a class="button" routerLink="/history" [queryParams]="{ environment: api.selectedEnvironmentKey() }">View history</a>
+    }
+  </div>
+}
+@if (aiError()) {
+  <div class="alert danger">{{ aiError() }}</div>
+}
+
+@if (result()) {
+  <section class="panel">
+    <h2>Upload result</h2>
+    <dl class="result-grid">
+      <div>
+        <dt>Imported workflows</dt>
+        <dd>{{ result()?.importedWorkflowsCount }}</dd>
+      </div>
+      <div>
+        <dt>Changed files</dt>
+        <dd>{{ result()?.changedFilesCount }}</dd>
+      </div>
+      <div>
+        <dt>Commit SHA</dt>
+        <dd>{{ result()?.commitSha ?? 'No commit created' }}</dd>
+      </div>
+      <div>
+        <dt>Commit message</dt>
+        <dd>{{ result()?.commitMessage ?? 'No commit created' }}</dd>
+      </div>
+      <div>
+        <dt>Status</dt>
+        <dd>{{ result()?.message }}</dd>
+      </div>
+    </dl>
+
+    @if (result()?.commitSha) {
+      <div class="actions wrap-actions">
+        <a class="button" [routerLink]="['/diff', result()?.commitSha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">View commit diff</a>
+        <button class="button" type="button" (click)="generateCommitMessage()" [disabled]="aiLoading() || !semanticDiff()">
+          {{ aiLoading() ? 'Generating...' : 'Generate message with AI' }}
+        </button>
+      </div>
+    }
+  </section>
+
+  @if (result()?.commitSha) {
+    <section class="panel stack-top">
+      <header>
+        <div>
+          <h2>Commit message review</h2>
+          <p class="empty">This diff is generated against the previous commit. Edit the message manually or let AI draft one from the semantic workflow diff.</p>
+        </div>
+        <span class="status" [class.on]="semanticDiff()">{{ semanticDiff() ? 'diff ready' : 'loading diff' }}</span>
+      </header>
+
+      <label class="commit-message-field">
+        <span>Message to store in Git</span>
+        <textarea [ngModel]="commitMessage()" (ngModelChange)="commitMessage.set($event)" rows="3"></textarea>
+      </label>
+
+      @if (aiMessageSuggestion()) {
+        <div class="ai-answer stack-top-small">
+          <header>
+            <strong>AI suggestion</strong>
+            <span class="status">{{ aiMessageSuggestion()?.confidence }}</span>
+          </header>
+          <p>{{ aiMessageSuggestion()?.answer }}</p>
+        </div>
+      }
+
+      <div class="actions wrap-actions stack-top-small">
+        <button class="button primary" type="button" (click)="updateCommitMessage()" [disabled]="savingMessage() || !commitMessage().trim()">
+          {{ savingMessage() ? 'Saving...' : 'Update commit message' }}
+        </button>
+        <button class="button" type="button" (click)="generateCommitMessage()" [disabled]="aiLoading() || !semanticDiff()">
+          {{ aiLoading() ? 'Generating...' : 'Generate with AI' }}
+        </button>
+      </div>
+
+      @if (semanticDiff()) {
+        <div class="summary-grid diff-summary-grid stack-top">
+          <span>Workflows <strong>{{ semanticDiff()?.workflows?.length }}</strong></span>
+          <span>Changed files <strong>{{ result()?.changedFilesCount }}</strong></span>
+          <span>Generated <strong class="small-strong">{{ semanticDiff()?.generatedAt }}</strong></span>
+        </div>
+      }
+    </section>
+  }
+}

@@ -1,0 +1,103 @@
+<section class="page-header">
+  <div>
+    <h1>Workflows · {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }}</h1>
+    <p>Latest workflow metadata from <code>{{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</code>.</p>
+  </div>
+</section>
+
+@if (error()) {
+  <app-ui-alert tone="danger">{{ error() }}</app-ui-alert>
+}
+@if (loading()) {
+  <app-ui-alert tone="loading"><span class="spinner" aria-hidden="true"></span>Environment changed. Reloading workflows for <strong>{{ api.selectedEnvironmentKey() }}</strong>...</app-ui-alert>
+}
+
+<app-ui-panel class="stack-top">
+  <header>
+    <div>
+      <h2>n8n API sync</h2>
+      <p class="empty">Create a versioned snapshot from the selected n8n instance. This fetches workflows only; it never changes the remote instance.</p>
+    </div>
+    @if (apiConfig()?.enabled && apiConfig()?.hasApiKey) {
+      <span class="status on">connected</span>
+    } @else {
+      <span class="status warning">not configured</span>
+    }
+  </header>
+  <div class="actions wrap-actions">
+    <button class="button primary" type="button" (click)="previewReconciliation()" [disabled]="previewing() || syncing() || !apiConfig()?.enabled || !apiConfig()?.hasApiKey">
+      {{ previewing() ? 'Checking n8n…' : 'Preview n8n changes' }}
+    </button>
+    <a class="button" routerLink="/data-tables" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Configure API connection</a>
+  </div>
+
+  @if (syncResult()) {
+    <dl class="result-grid stack-top-small">
+      <div><dt>Fetched</dt><dd>{{ syncResult()?.fetchedWorkflowsCount }} workflow(s)</dd></div>
+      <div><dt>Changed files</dt><dd>{{ syncResult()?.changedFilesCount }}</dd></div>
+      <div><dt>Credential references</dt><dd>{{ syncResult()?.credentialReferencesScanned }}</dd></div>
+      <div><dt>Commit</dt><dd>{{ syncResult()?.commitSha ?? 'No changes detected' }}</dd></div>
+    </dl>
+    @if (syncResult()?.warnings?.length) {
+      <div class="alert stack-top-small">{{ syncResult()?.warnings?.join(' ') }}</div>
+    }
+  }
+</app-ui-panel>
+
+@if (reconciliation()) {
+  <app-ui-table class="panel stack-top">
+    <header>
+      <div><h2>Reconciliation preview</h2><p class="empty">Select remote additions and changes to import. Local-only workflows are left untouched.</p></div>
+      <button class="button primary" type="button" (click)="syncSelected()" [disabled]="syncing() || selectedRemoteIds().length === 0">{{ syncing() ? 'Syncing…' : 'Sync selected' }}</button>
+    </header>
+    <table>
+      <thead><tr><th>Sync</th><th>Workflow</th><th>Status</th><th>Git file</th></tr></thead>
+      <tbody>
+        @for (item of reconciliation()?.items ?? []; track item.workflowId ?? item.filePath) {
+          <tr>
+            <td>@if (item.canSync && item.workflowId) { <input type="checkbox" [checked]="selectedRemoteIds().includes(item.workflowId)" (change)="toggleRemote(item.workflowId, $event)" /> } @else { — }</td>
+            <td>{{ item.name }}</td>
+            <td><span class="status" [class.warning]="item.status !== 'in-sync'" [class.on]="item.status === 'in-sync'">{{ item.status }}</span></td>
+            <td><code>{{ item.filePath ?? '—' }}</code></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </app-ui-table>
+}
+
+<app-ui-table class="panel">
+  <header>
+    <h2>Workflow catalog</h2>
+    <div class="table-actions"><input [(ngModel)]="search" (keyup.enter)="searchWorkflows()" placeholder="Search name or ID" /><button class="button" type="button" (click)="searchWorkflows()">Search</button></div>
+  </header>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>ID</th>
+        <th>Status</th>
+        <th>Nodes</th>
+        <th>Updated</th>
+        <th>File</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (workflow of workflows(); track workflow.filePath) {
+        <tr>
+          <td>{{ workflow.name }}</td>
+          <td>{{ workflow.id ?? 'n/a' }}</td>
+          <td><span class="status" [class.on]="workflow.active">{{ workflow.active ? 'active' : 'inactive' }}</span></td>
+          <td>{{ workflow.nodesCount }}</td>
+          <td>{{ workflow.updatedAt ? (workflow.updatedAt | date: 'short') : 'n/a' }}</td>
+          <td><code>{{ workflow.filePath }}</code></td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="6" class="empty">No workflows imported yet.</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  <div class="actions stack-top"><button class="button" type="button" (click)="previous()" [disabled]="page() === 1">Previous</button><span class="empty">Page {{ page() }} · {{ totalCount() }} workflows</span><button class="button" type="button" (click)="next()" [disabled]="page() * 25 >= totalCount()">Next</button></div>
+</app-ui-table>

@@ -1,0 +1,2 @@
+namespace Domain;
+public sealed class DataTableDeploymentAudit { public Guid Id { get; set; } public Guid WorkspaceId { get; set; } public string SourceEnvironmentKey { get; set; } = string.Empty; public string TargetEnvironmentKey { get; set; } = string.Empty; public string Status { get; set; } = string.Empty; public string TableIdsJson { get; set; } = "[]"; public string? ActorUserName { get; set; } public DateTimeOffset CreatedAt { get; set; } }

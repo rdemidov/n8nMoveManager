@@ -1,0 +1,274 @@
+<section class="page-header">
+  <div>
+    <h1>Manual Merge</h1>
+    @if (session()) {
+      <p>{{ session()?.sourceEnvironmentKey }} to {{ session()?.targetEnvironmentKey }} - <code>{{ session()?.workflowFilePath }}</code></p>
+    } @else {
+      <p>Build a workflow result from source and target selections.</p>
+    }
+  </div>
+  <div class="actions wrap-actions">
+    <a class="button" routerLink="/promotion">Promotion</a>
+    <button class="button primary" type="button" (click)="buildPreview()" [disabled]="!session() || previewing()">
+      {{ previewing() ? 'Building...' : 'Build Preview' }}
+    </button>
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="alert loading-alert"><span class="spinner"></span> Loading manual merge...</div>
+}
+@if (saving()) {
+  <div class="alert">Saving selections...</div>
+}
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (message()) {
+  <div class="alert">{{ message() }}</div>
+}
+
+@if (session()) {
+  <section class="manual-merge-grid">
+    <section class="panel">
+      <header>
+        <h2>Source</h2>
+        <span class="status on">{{ session()?.sourceEnvironmentKey }}</span>
+      </header>
+      <h3>{{ session()?.sourceWorkflow?.workflowName }}</h3>
+      <div class="summary-grid">
+        <span>Nodes <strong>{{ session()?.sourceWorkflow?.nodesCount }}</strong></span>
+        <span>Active <strong>{{ session()?.sourceWorkflow?.active }}</strong></span>
+        <span>Credentials <strong>{{ session()?.sourceWorkflow?.credentialReferences?.length }}</strong></span>
+      </div>
+    </section>
+
+    <section class="panel result-panel">
+      <header>
+        <h2>Result</h2>
+        <span class="status" [class.on]="preview()?.validationStatus === 'valid'">{{ preview()?.validationStatus ?? 'not built' }}</span>
+      </header>
+      @if (preview()) {
+        <div class="summary-grid">
+          <span>Result vs Target nodes <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.modifiedNodes }}</strong></span>
+          <span>Warnings <strong>{{ preview()?.warnings?.length }}</strong></span>
+          <span>Blocking <strong>{{ preview()?.blockingErrors?.length }}</strong></span>
+        </div>
+      } @else {
+        <p class="empty">Build preview to validate and inspect the generated workflow.</p>
+      }
+    </section>
+
+    <section class="panel">
+      <header>
+        <h2>Target</h2>
+        <span class="status">{{ session()?.targetEnvironmentKey }}</span>
+      </header>
+      <h3>{{ session()?.targetWorkflow?.workflowName }}</h3>
+      <div class="summary-grid">
+        <span>Nodes <strong>{{ session()?.targetWorkflow?.nodesCount }}</strong></span>
+        <span>Active <strong>{{ session()?.targetWorkflow?.active }}</strong></span>
+        <span>Credentials <strong>{{ session()?.targetWorkflow?.credentialReferences?.length }}</strong></span>
+      </div>
+    </section>
+  </section>
+
+  <section class="panel stack-top">
+    <header>
+      <h2>Workflow settings</h2>
+      <span class="status">{{ session()?.selection?.workflowSettingsSelections?.length }} changed</span>
+    </header>
+    <table>
+      <thead>
+        <tr><th>Property</th><th>Source</th><th>Target</th><th>Result</th></tr>
+      </thead>
+      <tbody>
+        @for (setting of session()?.selection?.workflowSettingsSelections; track setting.propertyName) {
+          <tr>
+            <td><code>{{ setting.propertyName }}</code></td>
+            <td>{{ setting.sourceValuePreview ?? 'None' }}</td>
+            <td>{{ setting.targetValuePreview ?? 'None' }}</td>
+            <td>
+              <select [ngModel]="setting.selectedSide" (ngModelChange)="setSetting(setting, $event)">
+                <option value="source">Source</option>
+                <option value="target">Target</option>
+              </select>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4"><p class="empty">No changed workflow settings.</p></td></tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel stack-top">
+    <header>
+      <h2>Nodes</h2>
+      <span class="status">{{ session()?.selection?.nodeSelections?.length }} nodes</span>
+    </header>
+    <div class="rows">
+      @for (node of session()?.selection?.nodeSelections; track node.nodeMatchKey) {
+        <details class="row detail-row" [open]="openedNodeKey() === node.nodeMatchKey || node.changeType === 'modified'">
+          <summary>
+            <strong>{{ node.nodeName }}</strong>
+            <span>{{ node.nodeType }}</span>
+            <span class="status" [class.on]="node.changeType === 'added' || node.changeType === 'modified'">{{ node.changeType }}</span>
+            <select [ngModel]="node.resolution" (ngModelChange)="setNode(node, $event)">
+              <option value="use-source">Use source</option>
+              <option value="use-target">Use target</option>
+              <option value="exclude">Exclude</option>
+              <option value="parameter-level">Parameter-level</option>
+            </select>
+          </summary>
+
+          <div class="actions wrap-actions stack-top-small">
+            <button class="button" type="button" (click)="explainNode(node)" [disabled]="aiLoading()">Ask AI to explain this node conflict</button>
+            <button class="button" type="button" (click)="suggestParameters(node)" [disabled]="aiLoading() || parametersFor(node).length === 0">Ask AI to suggest parameter choices</button>
+          </div>
+
+          @if (parametersFor(node).length > 0) {
+            <table class="stack-top-small">
+              <thead>
+                <tr><th>Parameter</th><th>Source</th><th>Target</th><th>Selected</th></tr>
+              </thead>
+              <tbody>
+                @for (parameter of parametersFor(node); track parameter.nodeMatchKey + parameter.parameterPath) {
+                  <tr>
+                    <td><code>{{ parameter.parameterPath }}</code></td>
+                    <td>{{ parameter.sourceValuePreview ?? 'None' }}</td>
+                    <td>{{ parameter.targetValuePreview ?? 'None' }}</td>
+                    <td>
+                      <select [ngModel]="parameter.selectedSide" (ngModelChange)="setParameter(parameter, $event)" [disabled]="node.resolution !== 'parameter-level'">
+                        <option value="source">Source</option>
+                        <option value="target">Target</option>
+                      </select>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          } @else {
+            <p class="empty stack-top-small">No changed parameters for this node.</p>
+          }
+        </details>
+      }
+    </div>
+  </section>
+
+  <section class="split stack-top">
+    <section class="panel">
+      <header>
+        <h2>Credentials</h2>
+        <span class="status">target mappings</span>
+      </header>
+      <table>
+        <thead>
+          <tr><th>Node</th><th>Source credential</th><th>Target mapping</th></tr>
+        </thead>
+        <tbody>
+          @for (credential of session()?.sourceWorkflow?.credentialReferences; track credential.nodeName + credential.credentialType + credential.credentialName) {
+            <tr>
+              <td>{{ credential.nodeName }}</td>
+              <td>{{ credential.credentialName ?? credential.credentialId ?? credential.credentialType }}</td>
+              <td>
+                @if (credential.isMapped) {
+                  {{ credential.mappedCredentialName ?? credential.mappedCredentialId ?? 'Mapped' }}
+                } @else {
+                  <span class="status warning">Missing mapping</span>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="3"><p class="empty">No credential references detected.</p></td></tr>
+          }
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <header>
+        <h2>Connections</h2>
+        <span class="status">{{ session()?.semanticDiff?.connectionChanges?.length }} changes</span>
+      </header>
+      <div class="restore-inline">
+        <label class="check-line">
+          <input type="radio" name="connections" value="source" [ngModel]="session()?.selection?.connectionSelection" (ngModelChange)="setConnectionSelection($event)">
+          Use source connections
+        </label>
+        <label class="check-line">
+          <input type="radio" name="connections" value="target" [ngModel]="session()?.selection?.connectionSelection" (ngModelChange)="setConnectionSelection($event)">
+          Use target connections
+        </label>
+      </div>
+      <div class="rows compact-list stack-top-small">
+        @for (connection of session()?.semanticDiff?.connectionChanges; track connection.sourceNodeName + connection.targetNodeName + connection.changeType) {
+          <code>{{ connection.changeType }}: {{ connection.sourceNodeName }} -> {{ connection.targetNodeName }}</code>
+        } @empty {
+          <p class="empty">No connection differences.</p>
+        }
+      </div>
+    </section>
+  </section>
+
+  @if (aiError()) {
+    <div class="alert danger stack-top">{{ aiError() }}</div>
+  }
+  @if (aiAnswer()) {
+    <section class="panel stack-top ai-answer">
+      <header>
+        <h2>AI suggestion</h2>
+        <span class="status">{{ aiAnswer()?.confidence }}</span>
+      </header>
+      <p>{{ aiAnswer()?.answer }}</p>
+      @if ((aiAnswer()?.recommendedNextSteps?.length ?? 0) > 0) {
+        <ul>
+          @for (step of aiAnswer()?.recommendedNextSteps; track step) {
+            <li>{{ step }}</li>
+          }
+        </ul>
+      }
+    </section>
+  }
+
+  @if (preview()) {
+    <section class="panel stack-top">
+      <header>
+        <h2>Validation</h2>
+        <span class="status" [class.on]="preview()?.validationStatus === 'valid'">{{ preview()?.validationStatus }}</span>
+      </header>
+      @for (error of preview()?.blockingErrors; track error) {
+        <div class="alert danger">{{ error }}</div>
+      }
+      @for (warning of preview()?.warnings; track warning) {
+        <div class="alert">{{ warning }}</div>
+      }
+      @for (info of preview()?.infoMessages; track info) {
+        <p class="empty">{{ info }}</p>
+      }
+      <div class="summary-grid stack-top-small">
+        <span>Result vs Target modified nodes <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.modifiedNodes }}</strong></span>
+        <span>Result vs Source modified nodes <strong>{{ preview()?.semanticDiffResultVsSource?.summary?.modifiedNodes }}</strong></span>
+        <span>Changed settings <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.changedWorkflowSettings }}</strong></span>
+      </div>
+      <button class="button" type="button" (click)="showJson.set(!showJson())">{{ showJson() ? 'Hide JSON' : 'Show raw JSON result' }}</button>
+      @if (showJson()) {
+        <pre>{{ preview()?.resultWorkflowJson }}</pre>
+      }
+    </section>
+
+    <section class="panel stack-top">
+      <header>
+        <h2>Apply</h2>
+        <span class="status warning">Creates a target commit</span>
+      </header>
+      <label class="check-line">
+        <input type="checkbox" [ngModel]="confirmApply()" (ngModelChange)="confirmApply.set($event)">
+        Confirm apply manual merge to target branch
+      </label>
+      <button class="button primary stack-top-small" type="button" (click)="apply()" [disabled]="!canApply()">
+        {{ applying() ? 'Applying...' : 'Apply Manual Merge' }}
+      </button>
+    </section>
+  }
+}

@@ -1,0 +1,16 @@
+@if (confirmation.request(); as request) {
+  <div class="modal-backdrop confirmation-backdrop" (click)="confirmation.close(false)">
+    <section class="modal-panel confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-message" (click)="$event.stopPropagation()">
+      <header class="modal-header">
+        <div>
+          <h2 id="confirmation-title">{{ request.title }}</h2>
+          <p id="confirmation-message">{{ request.message }}</p>
+        </div>
+      </header>
+      <footer class="confirmation-actions">
+        <button id="confirmation-cancel" class="button" type="button" (click)="confirmation.close(false)">Cancel</button>
+        <button class="button" [class.danger-button]="request.danger" [class.primary]="!request.danger" type="button" (click)="confirmation.close(true)">{{ request.confirmLabel }}</button>
+      </footer>
+    </section>
+  </div>
+}

@@ -1,0 +1,51 @@
+@if (isLoginRoute()) {
+  <main class="login-main">
+    <router-outlet />
+  </main>
+} @else {
+<div class="shell">
+  <aside class="sidebar">
+    <a routerLink="/" class="brand" aria-label="n8n Move Manager dashboard">
+      <span class="brand-mark">n8n</span>
+      <span>Move Manager</span>
+    </a>
+
+    <label class="environment-selector">
+      <span>Environment</span>
+      <select [value]="api.selectedEnvironmentKey()" (change)="selectEnvironment($event)">
+        @for (environment of environments(); track environment.key) {
+          <option [value]="environment.key">{{ environment.name }} ({{ environment.gitBranch }})</option>
+        }
+      </select>
+    </label>
+
+    <nav>
+      @if (auth.userName()) { <button class="button sidebar-sign-out" type="button" (click)="logout()">Sign out · {{ auth.userName() }}</button> } @else { <a routerLink="/login">Sign in</a> }
+      <a routerLink="/" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+      <a routerLink="/environments" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Environments</a>
+      <a routerLink="/upload" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Upload Workflows</a>
+      <a routerLink="/docker" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Docker Export</a>
+      <a routerLink="/scheduled-jobs" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Scheduled Jobs</a>
+      <a routerLink="/workflows" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Workflows List</a>
+      <a routerLink="/data-tables" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Data Tables</a>
+      <a routerLink="/credentials" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Credentials</a>
+      <a routerLink="/mappings" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Mappings</a>
+      <a routerLink="/promotion" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Promotion</a>
+      <a routerLink="/history" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Git History</a>
+      <a routerLink="/backups" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Backups</a>
+      <a routerLink="/diff/latest" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">Latest Diff</a>
+      <a class="nav-settings-link" routerLink="/settings/ai" [queryParams]="{ environment: api.selectedEnvironmentKey() }" routerLinkActive="active">
+        <span class="nav-icon" aria-hidden="true">AI</span>
+        <span>AI Settings</span>
+      </a>
+    </nav>
+  </aside>
+
+  <main>
+    <router-outlet />
+  </main>
+</div>
+}
+
+<app-confirmation-dialog />
+<app-toast-viewport />

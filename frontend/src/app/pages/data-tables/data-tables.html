@@ -1,0 +1,71 @@
+<section class="page-header">
+  <div>
+    <h1>Data Tables · {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }}</h1>
+    <p>Sync schema-only snapshots from n8n. Rows are never copied or promoted by this feature.</p>
+  </div>
+  <button class="button primary" type="button" (click)="sync()" [disabled]="syncing() || !form.enabled">{{ syncing() ? 'Syncing…' : 'Sync schemas' }}</button>
+</section>
+
+@if (error()) { <div class="alert danger">{{ error() }}</div> }
+@if (message()) { <div class="alert">{{ message() }}</div> }
+
+<section class="split wide-left">
+  <div class="panel">
+    <header><h2>n8n API connection</h2><span class="status" [class.on]="form.enabled">{{ form.enabled ? 'enabled' : 'disabled' }}</span></header>
+    <div class="form-grid">
+      <label class="check-line"><input type="checkbox" [(ngModel)]="form.enabled" /><span>Enable API sync</span></label>
+      <label><span>n8n base URL</span><input [(ngModel)]="form.baseUrl" placeholder="https://n8n.example.com" /></label>
+      <label><span>Data Tables path</span><input [(ngModel)]="form.dataTablesPath" placeholder="/api/v1/data-tables" /></label>
+      <label><span>Workflow API path</span><input [(ngModel)]="form.workflowApiPath" placeholder="/api/v1/workflows" /></label>
+      <label><span>Schema write path (optional)</span><input [(ngModel)]="form.dataTablesWritePathTemplate" placeholder="/api/v1/data-tables/{id}" /></label>
+      <label><span>API key</span><input type="password" [(ngModel)]="apiKey" placeholder="Leave blank to keep the saved key" autocomplete="new-password" /></label>
+    </div>
+    <button class="button" type="button" (click)="save()" [disabled]="saving()">{{ saving() ? 'Saving…' : 'Save connection' }}</button>
+  </div>
+
+  <div class="panel">
+    <header><h2>Compare environments</h2></header>
+    <div class="selector-grid">
+      <label><span>Source</span><input [value]="api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey()" disabled /></label>
+      <label><span>Target</span><select [(ngModel)]="targetEnvironment"><option value="">Choose an environment</option>@for (environment of api.environments(); track environment.key) { @if (environment.key !== api.selectedEnvironmentKey()) { <option [value]="environment.key">{{ environment.name }}</option> } }</select></label>
+      <button class="button" type="button" (click)="compare()" [disabled]="!targetEnvironment">Compare</button>
+    </div>
+    @if (comparison()) { <p class="empty">{{ comparison()?.items?.length }} table(s) compared. Schema and row-count differences are visible below.</p> }
+  </div>
+</section>
+
+<section class="panel stack-top">
+  <header>
+    <div>
+      <h2>Workflow snapshots</h2>
+      <p class="empty">Fetch full definitions through the n8n public API, normalize them, scan credential references, and commit only changed workflow files to this environment branch.</p>
+    </div>
+    <button class="button primary" type="button" (click)="syncWorkflows()" [disabled]="syncingWorkflows() || !form.enabled">
+      {{ syncingWorkflows() ? 'Syncing workflows…' : 'Sync workflows from n8n' }}
+    </button>
+  </header>
+</section>
+
+<section class="panel table-panel stack-top">
+  <header><h2>Schema snapshots</h2><div class="table-actions"><input [(ngModel)]="search" (keyup.enter)="page.set(1); loadTables()" placeholder="Search tables" /><button class="button" type="button" (click)="page.set(1); loadTables()">Search</button></div></header>
+  <table><thead><tr><th>Name</th><th>ID</th><th>Columns</th><th>Rows</th><th>Last synced</th></tr></thead>
+  <tbody>
+    @for (table of tables(); track table.id) { <tr><td>{{ table.name }}</td><td><code>{{ table.id }}</code></td><td><code>{{ table.columnsJson }}</code></td><td>{{ table.rowCount ?? 'unknown' }}</td><td>{{ table.lastSyncedAt | date: 'short' }}</td></tr> }
+    @empty { <tr><td colspan="5" class="empty">No snapshots yet. Save a connection and sync schemas.</td></tr> }
+  </tbody></table>
+  <div class="actions stack-top"><button class="button" (click)="previous()" [disabled]="page() === 1">Previous</button><span class="empty">Page {{ page() }} · {{ totalCount() }} tables</span><button class="button" (click)="next()" [disabled]="page() * 25 >= totalCount()">Next</button></div>
+</section>
+
+@if (comparison()) {
+<section class="panel table-panel stack-top"><header><h2>Comparison</h2></header><table><thead><tr><th>Table</th><th>Status</th><th>Source rows</th><th>Target rows</th></tr></thead><tbody>
+@for (item of comparison()?.items ?? []; track item.id) { <tr><td>{{ item.name }}</td><td><span class="status" [class.warning]="item.status !== 'in-sync'">{{ item.status }}</span></td><td>{{ item.sourceRowCount ?? 'unknown' }}</td><td>{{ item.targetRowCount ?? 'unknown' }}</td></tr> }
+</tbody></table></section> }
+
+@if (promotionPlan()) {
+<section class="panel table-panel stack-top">
+  <header><div><h2>Stage schema promotion</h2><p class="empty">{{ promotionPlan()?.safetyNotice }}</p></div><button class="button primary" type="button" (click)="stagePromotion()" [disabled]="staging() || selectedTableIds().length === 0">{{ staging() ? 'Staging…' : 'Stage selected schemas' }}</button></header>
+  <table><thead><tr><th>Stage</th><th>Table</th><th>Change</th><th>Source rows</th><th>Target rows</th></tr></thead><tbody>
+    @for (item of promotionPlan()?.changes ?? []; track item.id) { <tr><td><input type="checkbox" [checked]="selectedTableIds().includes(item.id)" (change)="toggleTable(item.id, $event)" /></td><td>{{ item.name }}</td><td><span class="status warning">{{ item.status }}</span></td><td>{{ item.sourceRowCount ?? 'unknown' }}</td><td>{{ item.targetRowCount ?? 'unknown' }}</td></tr> }
+    @empty { <tr><td colspan="5" class="empty">No schema changes to stage.</td></tr> }
+  </tbody></table>
+</section> }

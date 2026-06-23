@@ -1,0 +1,281 @@
+<section class="page-header">
+  <div>
+    <h1>Commit Diff - {{ api.selectedEnvironment()?.name ?? environmentKey() }}</h1>
+    <p>{{ commit()?.message ?? (sha() && sha() !== 'latest' ? sha() : 'Latest commit') }} - <code>{{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</code></p>
+    @if (commit()) {
+      <p class="empty">{{ commit()?.shortSha }} - {{ commit()?.authorName }} - {{ commit()?.when | date: 'medium' }}</p>
+    }
+  </div>
+  <a class="button" routerLink="/history" [queryParams]="{ environment: environmentKey() }">Back to history</a>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (semanticError() && viewMode() !== 'raw') {
+  <div class="alert">{{ semanticError() }}</div>
+}
+
+<section class="panel view-tabs">
+  <button class="button" type="button" [class.primary]="viewMode() === 'summary'" (click)="viewMode.set('summary')">Summary</button>
+  <button class="button" type="button" [class.primary]="viewMode() === 'nodes'" (click)="viewMode.set('nodes')">Node details</button>
+  <button class="button" type="button" [class.primary]="viewMode() === 'raw'" (click)="viewMode.set('raw')">Raw JSON diff</button>
+</section>
+
+<section class="panel ai-panel">
+  <header>
+    <div>
+      <p class="empty">Workflow metadata and diff context may be sent to your configured AI provider. AI suggestions require human review.</p>
+    </div>
+    <span class="status" [class.on]="aiSettings()?.enabled && aiSettings()?.hasApiKey">{{ aiSettings()?.enabled ? 'enabled' : 'disabled' }}</span>
+  </header>
+  <div class="actions wrap-actions">
+    <button class="button" type="button" (click)="summarizeChanges()" [disabled]="aiLoading() || !semanticDiff()">Summarize changes</button>
+    <button class="button" type="button" (click)="findRisks()" [disabled]="aiLoading() || !semanticDiff()">Find risks</button>
+    <button class="button" type="button" (click)="explainCredentials()" [disabled]="aiLoading() || !semanticDiff()">Explain credentials</button>
+  </div>
+  <div class="ai-chat">
+    <input [ngModel]="aiQuestion()" (ngModelChange)="aiQuestion.set($event)" placeholder="Ask about this diff" />
+    <button class="button primary" type="button" (click)="askAi()" [disabled]="aiLoading() || !semanticDiff()">Ask</button>
+  </div>
+  @if (aiError()) {
+    <div class="alert danger stack-top-small">{{ aiError() }}</div>
+  }
+  @if (aiAnswer()) {
+    <div class="ai-answer stack-top-small">
+      <header>
+        <strong>Confidence: {{ aiAnswer()?.confidence }}</strong>
+        @if (aiAnswer()?.suggestedResolution) {
+          <span class="status on">{{ aiAnswer()?.suggestedResolution }}</span>
+        }
+      </header>
+      <p>{{ aiAnswer()?.answer }}</p>
+      @if ((aiAnswer()?.risks?.length ?? 0) > 0) {
+        <h3>Risks</h3>
+        <ul>
+          @for (risk of aiAnswer()?.risks; track risk) {
+            <li>{{ risk }}</li>
+          }
+        </ul>
+      }
+      @if ((aiAnswer()?.recommendedNextSteps?.length ?? 0) > 0) {
+        <h3>Recommended next steps</h3>
+        <ul>
+          @for (step of aiAnswer()?.recommendedNextSteps; track step) {
+            <li>{{ step }}</li>
+          }
+        </ul>
+      }
+    </div>
+  }
+</section>
+
+@if (viewMode() === 'summary') {
+  @if (semanticDiff()) {
+    <section class="metrics semantic-metrics">
+      <article>
+        <span>Workflows</span>
+        <strong>{{ semanticDiff()?.workflows?.length }}</strong>
+      </article>
+      <article>
+        <span>Node changes</span>
+        <strong>{{ totalNodeChanges() }}</strong>
+      </article>
+      <article>
+        <span>Generated</span>
+        <strong class="small-strong">{{ semanticDiff()?.generatedAt }}</strong>
+      </article>
+    </section>
+
+    @for (workflow of semanticDiff()?.workflows; track workflowPath(workflow)) {
+      <section class="panel semantic-workflow">
+        <header>
+          <div>
+            <h2>{{ workflow.workflowName }}</h2>
+            <span class="status" [class.on]="workflow.changeType === 'added' || workflow.changeType === 'modified'">{{ workflow.changeType }}</span>
+          </div>
+          <div class="actions wrap-actions">
+            <code>{{ workflowPath(workflow) }}</code>
+            @if (sha() && sha() !== 'latest' && workflow.changeType !== 'removed') {
+              <a
+                class="button"
+                routerLink="/manual-merge"
+                [queryParams]="{ source: environmentKey(), target: environmentKey(), path: workflowPath(workflow), sourceCommitSha: sha() }">
+                Manual Merge
+              </a>
+            }
+          </div>
+        </header>
+        <div class="summary-grid">
+          <span>Added nodes <strong>{{ workflow.summary.addedNodes }}</strong></span>
+          <span>Removed nodes <strong>{{ workflow.summary.removedNodes }}</strong></span>
+          <span>Modified nodes <strong>{{ workflow.summary.modifiedNodes }}</strong></span>
+          <span>Credentials <strong>{{ workflow.summary.changedCredentials }}</strong></span>
+          <span>Connections <strong>{{ workflow.summary.changedConnections }}</strong></span>
+          <span>Settings <strong>{{ workflow.summary.changedWorkflowSettings }}</strong></span>
+        </div>
+        @for (warning of workflow.warnings; track warning) {
+          <p class="empty">{{ warning }}</p>
+        }
+      </section>
+    } @empty {
+      <section class="panel">
+        <p class="empty">No semantic workflow changes are available.</p>
+      </section>
+    }
+  }
+}
+
+@if (viewMode() === 'nodes') {
+  @for (workflow of semanticDiff()?.workflows; track workflowPath(workflow)) {
+    <section class="panel semantic-workflow">
+      <header>
+        <div>
+          <h2>{{ workflow.workflowName }}</h2>
+          <span class="status">{{ workflow.changeType }}</span>
+        </div>
+        @if (sha() && sha() !== 'latest' && workflow.changeType !== 'removed') {
+          <a
+            class="button"
+            routerLink="/manual-merge"
+            [queryParams]="{ source: environmentKey(), target: environmentKey(), path: workflowPath(workflow), sourceCommitSha: sha() }">
+            Manual Merge
+          </a>
+        }
+      </header>
+
+      <div class="rows">
+        @for (node of workflow.nodeChanges; track node.nodeName + node.nodeType) {
+          <details class="row detail-row" [open]="node.changeType === 'modified'">
+            <summary>
+              <strong>{{ node.nodeName }}</strong>
+              <span>{{ node.nodeType }}</span>
+              <span class="status" [class.on]="node.changeType === 'added' || node.changeType === 'modified'">{{ node.changeType }}</span>
+              <small>{{ nodeChangeCount(node) }} changes</small>
+            </summary>
+
+            @if (node.parameterChanges.length > 0) {
+              <h3>Parameters</h3>
+              <table>
+                <thead>
+                  <tr><th>Path</th><th>Old</th><th>New</th><th>Type</th></tr>
+                </thead>
+                <tbody>
+                  @for (change of node.parameterChanges; track change.path) {
+                    <tr>
+                      <td><code>{{ change.path }}</code></td>
+                      <td>{{ change.oldValuePreview ?? 'None' }}</td>
+                      <td>{{ change.newValuePreview ?? 'None' }}</td>
+                      <td><span class="status" [class.low]="change.importance === 'low'">{{ change.importance }}</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @if (node.credentialChanges.length > 0) {
+              <h3>Credentials</h3>
+              <table>
+                <thead>
+                  <tr><th>Key</th><th>Type</th><th>Old</th><th>New</th></tr>
+                </thead>
+                <tbody>
+                  @for (credential of node.credentialChanges; track credential.credentialKey) {
+                    <tr>
+                      <td><code>{{ credential.credentialKey }}</code></td>
+                      <td>{{ credential.credentialType }}</td>
+                      <td>{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }}</td>
+                      <td>{{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @if (node.metadataChanges.length > 0) {
+              <h3>Node metadata</h3>
+              <table>
+                <thead>
+                  <tr><th>Path</th><th>Old</th><th>New</th><th>Importance</th></tr>
+                </thead>
+                <tbody>
+                  @for (change of node.metadataChanges; track change.path) {
+                    <tr>
+                      <td><code>{{ change.path }}</code></td>
+                      <td>{{ change.oldValuePreview ?? 'None' }}</td>
+                      <td>{{ change.newValuePreview ?? 'None' }}</td>
+                      <td><span class="status low">{{ change.importance }}</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </details>
+        } @empty {
+          <p class="empty">No node changes.</p>
+        }
+      </div>
+
+      @if (workflow.workflowSettingsChanges.length > 0) {
+        <h3>Workflow settings</h3>
+        <table>
+          <thead>
+            <tr><th>Path</th><th>Old</th><th>New</th></tr>
+          </thead>
+          <tbody>
+            @for (change of workflow.workflowSettingsChanges; track change.path) {
+              <tr>
+                <td><code>{{ change.path }}</code></td>
+                <td>{{ change.oldValuePreview ?? 'None' }}</td>
+                <td>{{ change.newValuePreview ?? 'None' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+
+      @if (workflow.connectionChanges.length > 0) {
+        <h3>Connections</h3>
+        <table>
+          <thead>
+            <tr><th>Change</th><th>Source</th><th>Target</th><th>Output</th><th>Input</th></tr>
+          </thead>
+          <tbody>
+            @for (connection of workflow.connectionChanges; track connection.sourceNodeName + connection.targetNodeName + connection.changeType) {
+              <tr>
+                <td><span class="status">{{ connection.changeType }}</span></td>
+                <td>{{ connection.sourceNodeName }}</td>
+                <td>{{ connection.targetNodeName }}</td>
+                <td>{{ connection.outputIndex ?? 'Any' }}</td>
+                <td>{{ connection.inputIndex ?? 'Any' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  } @empty {
+    <section class="panel">
+      <p class="empty">Open a concrete commit to view semantic node details.</p>
+    </section>
+  }
+}
+
+@if (viewMode() === 'raw') {
+  @for (file of files(); track file.filePath) {
+    <section class="panel diff-file">
+      <header>
+        <div>
+          <h2>{{ file.filePath }}</h2>
+          <span class="status">{{ file.status }}</span>
+        </div>
+        <span class="diff-counts">+{{ file.linesAdded }} -{{ file.linesDeleted }}</span>
+      </header>
+      <pre>{{ file.patch }}</pre>
+    </section>
+  } @empty {
+    <section class="panel">
+      <p class="empty">No diff is available yet.</p>
+    </section>
+  }
+}

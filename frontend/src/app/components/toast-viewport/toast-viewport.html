@@ -1,0 +1,13 @@
+<section class="toast-viewport" aria-live="polite" aria-atomic="true">
+  @for (item of toast.items(); track item.id) {
+    <article class="toast" [class.success]="item.kind === 'success'" [class.error]="item.kind === 'error'" [class.info]="item.kind === 'info'">
+      <p>{{ item.message }}</p>
+      <div class="toast-actions">
+        @if (item.action && item.actionLabel) {
+          <button class="toast-action" type="button" (click)="toast.runAction(item)">{{ item.actionLabel }}</button>
+        }
+        <button class="icon-button" type="button" (click)="toast.dismiss(item.id)" aria-label="Dismiss notification">×</button>
+      </div>
+    </article>
+  }
+</section>

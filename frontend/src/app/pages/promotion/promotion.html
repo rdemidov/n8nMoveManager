@@ -1,0 +1,645 @@
+<section class="page-header">
+  <div>
+    <h1>Promotion</h1>
+    <p>Generate a move plan, review workflow changes and credential mappings, then apply selected files to the target branch.</p>
+    <p class="empty">Promotion uses the source and target selectors below; the sidebar environment is only preserved for navigation.</p>
+  </div>
+</section>
+
+@if (selectedWorkflowDiff(); as workflow) {
+  <div class="modal-backdrop" (click)="closeWorkflowDiff()">
+    <section
+      class="modal-panel workflow-diff-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="promotion-workflow-diff-title"
+      (click)="$event.stopPropagation()">
+      <header class="modal-header">
+        <div>
+          <h2 id="promotion-workflow-diff-title">{{ workflow.workflowName }}</h2>
+          <p class="empty">
+            {{ sourceKey() }} to {{ targetKey() }} &middot;
+            <code>{{ workflow.newFilePath ?? workflow.oldFilePath ?? selectedWorkflowDiffChange()?.workflowFilePath ?? 'workflow file unavailable' }}</code>
+          </p>
+        </div>
+        <div class="actions wrap-actions">
+          @if (selectedWorkflowDiffChange(); as change) {
+            <a
+              class="button primary"
+              routerLink="/manual-merge"
+              [queryParams]="{ source: sourceKey(), target: targetKey(), path: change.workflowFilePath, sourceCommitSha: plan()?.sourceCommitSha, targetCommitSha: plan()?.targetCommitSha }">
+              Manual Merge
+            </a>
+          }
+          <button class="button" type="button" (click)="closeWorkflowDiff()">Close</button>
+        </div>
+      </header>
+
+      <div class="modal-body">
+        <section class="workflow-diff-detail">
+          <header>
+            <div>
+              <h3>Environment diff</h3>
+              <p class="empty">{{ workflow.changeType }} &middot; {{ sourceKey() }} to {{ targetKey() }}</p>
+            </div>
+            <span class="status" [class.on]="workflowHasVisibleChanges(workflow)">{{ workflow.changeType }}</span>
+          </header>
+
+          <div class="summary-grid diff-summary-grid">
+            <span>Added nodes <strong>{{ workflow.summary.addedNodes }}</strong></span>
+            <span>Removed nodes <strong>{{ workflow.summary.removedNodes }}</strong></span>
+            <span>Modified nodes <strong>{{ workflow.summary.modifiedNodes }}</strong></span>
+            <span>Credentials <strong>{{ workflow.summary.changedCredentials }}</strong></span>
+            <span>Connections <strong>{{ workflow.summary.changedConnections }}</strong></span>
+            <span>Settings <strong>{{ workflow.summary.changedWorkflowSettings }}</strong></span>
+          </div>
+
+          @if (workflow.warnings.length > 0) {
+            <h4>Warnings</h4>
+            <div class="rows stack-top-small">
+              @for (warning of workflow.warnings; track $index) {
+                <div class="row validation-issue warning">
+                  <strong>warning</strong>
+                  <span>{{ warning }}</span>
+                </div>
+              }
+            </div>
+          }
+
+          <h4>Node changes</h4>
+          <div class="rows stack-top-small">
+            @for (node of workflow.nodeChanges; track node.nodeName + node.nodeType) {
+              <details class="row detail-row" [open]="node.changeType === 'modified' || nodeChangeCount(node) > 0">
+                <summary>
+                  <strong>{{ node.nodeName }}</strong>
+                  <span>{{ node.nodeType }}</span>
+                  <span class="status" [class.on]="node.changeType === 'added' || node.changeType === 'modified'">{{ node.changeType }}</span>
+                  <small>{{ nodeChangeCount(node) }} changes</small>
+                </summary>
+
+                @if (node.parameterChanges.length > 0) {
+                  <h5>Parameters</h5>
+                  <table>
+                    <thead>
+                      <tr><th>Path</th><th>{{ sourceKey() }}</th><th>{{ targetKey() }}</th><th>Importance</th></tr>
+                    </thead>
+                    <tbody>
+                      @for (change of node.parameterChanges; track change.path) {
+                        <tr>
+                          <td><code>{{ change.path }}</code></td>
+                          <td class="old-value">{{ change.oldValuePreview ?? 'None' }}</td>
+                          <td class="new-value">{{ change.newValuePreview ?? 'None' }}</td>
+                          <td><span class="status" [class.on]="change.importance === 'high'">{{ change.importance }}</span></td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+
+                @if (node.credentialChanges.length > 0) {
+                  <h5>Credentials</h5>
+                  <table>
+                    <thead>
+                      <tr><th>Key</th><th>Type</th><th>{{ sourceKey() }}</th><th>{{ targetKey() }}</th></tr>
+                    </thead>
+                    <tbody>
+                      @for (credential of node.credentialChanges; track credential.credentialKey) {
+                        <tr>
+                          <td><code>{{ credential.credentialKey }}</code></td>
+                          <td>{{ credential.credentialType }}</td>
+                          <td class="old-value">{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }}</td>
+                          <td class="new-value">{{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+
+                @if (node.metadataChanges.length > 0) {
+                  <h5>Node metadata</h5>
+                  <table>
+                    <thead>
+                      <tr><th>Path</th><th>{{ sourceKey() }}</th><th>{{ targetKey() }}</th><th>Importance</th></tr>
+                    </thead>
+                    <tbody>
+                      @for (change of node.metadataChanges; track change.path) {
+                        <tr>
+                          <td><code>{{ change.path }}</code></td>
+                          <td class="old-value">{{ change.oldValuePreview ?? 'None' }}</td>
+                          <td class="new-value">{{ change.newValuePreview ?? 'None' }}</td>
+                          <td><span class="status low">{{ change.importance }}</span></td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </details>
+            } @empty {
+              <p class="empty">No node changes.</p>
+            }
+          </div>
+
+          @if (workflow.workflowSettingsChanges.length > 0) {
+            <h4>Workflow settings</h4>
+            <table>
+              <thead>
+                <tr><th>Path</th><th>{{ sourceKey() }}</th><th>{{ targetKey() }}</th><th>Importance</th></tr>
+              </thead>
+              <tbody>
+                @for (change of workflow.workflowSettingsChanges; track change.path) {
+                  <tr>
+                    <td><code>{{ change.path }}</code></td>
+                    <td class="old-value">{{ change.oldValuePreview ?? 'None' }}</td>
+                    <td class="new-value">{{ change.newValuePreview ?? 'None' }}</td>
+                    <td><span class="status" [class.on]="change.importance === 'high'">{{ change.importance }}</span></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          @if (workflow.connectionChanges.length > 0) {
+            <h4>Connections</h4>
+            <table>
+              <thead>
+                <tr><th>Change</th><th>Source</th><th>Target</th><th>Output</th><th>Input</th></tr>
+              </thead>
+              <tbody>
+                @for (connection of workflow.connectionChanges; track connection.sourceNodeName + connection.targetNodeName + connection.changeType) {
+                  <tr>
+                    <td><span class="status" [class.on]="connection.changeType === 'added' || connection.changeType === 'modified'">{{ connection.changeType }}</span></td>
+                    <td>{{ connection.sourceNodeName }}</td>
+                    <td>{{ connection.targetNodeName }}</td>
+                    <td>{{ connection.outputIndex ?? 'Any' }}</td>
+                    <td>{{ connection.inputIndex ?? 'Any' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </section>
+      </div>
+    </section>
+  </div>
+}
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (message()) {
+  <div class="alert">{{ message() }}</div>
+}
+@if (aiError()) {
+  <div class="alert danger">{{ aiError() }}</div>
+}
+@if (generatingPlan()) {
+  <div class="alert loading-alert"><span class="spinner" aria-hidden="true"></span>Generating promotion plan...</div>
+}
+
+<section class="panel selector-grid promotion-controls">
+  <label>
+    <span>Source</span>
+    <select [ngModel]="sourceKey()" (ngModelChange)="onEnvironmentChanged('source', $event)">
+      @for (environment of environments(); track environment.key) {
+        <option [value]="environment.key">{{ environment.name }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    <span>Target</span>
+    <select [ngModel]="targetKey()" (ngModelChange)="onEnvironmentChanged('target', $event)">
+      @for (environment of environments(); track environment.key) {
+        <option [value]="environment.key">{{ environment.name }}</option>
+      }
+    </select>
+  </label>
+  <label class="check-line">
+    <input type="checkbox" [ngModel]="includeDeletions()" (ngModelChange)="includeDeletions.set($event); generatePlan()" />
+    <span>Include deletions</span>
+  </label>
+  <button class="button primary" type="button" (click)="generatePlan()" [disabled]="generatingPlan()">
+    @if (generatingPlan()) {
+      <span class="spinner light" aria-hidden="true"></span>
+    }
+    {{ generatingPlan() ? 'Generating...' : 'Generate plan' }}
+  </button>
+</section>
+
+<section class="panel stack-top">
+  <header>
+    <div>
+      <h2>Comparison baseline</h2>
+      <p class="empty">Direct comparison is the default for independently uploaded environments. Select a commit only when it represents the shared starting point for both environments.</p>
+    </div>
+    <span class="status" [class.on]="baseline()">{{ baseline() ? 'three-way comparison' : 'direct comparison' }}</span>
+  </header>
+  <div class="form-grid">
+    <label>
+      <span>Baseline snapshot</span>
+      <select [(ngModel)]="selectedBaselineSha">
+        <option value="">Direct source vs target comparison</option>
+        @for (commit of baselineCommits(); track commit.sha) {
+          <option [value]="commit.sha">{{ commit.shortSha }} - {{ commit.message }}</option>
+        }
+      </select>
+    </label>
+  </div>
+  <div class="actions stack-top-small">
+    <button class="button" type="button" (click)="saveBaseline()" [disabled]="baselineSaving()">
+      {{ baselineSaving() ? 'Saving...' : selectedBaselineSha ? 'Use selected baseline' : 'Use direct comparison' }}
+    </button>
+    @if (baseline()) {
+      <span class="empty">Current: {{ baseline()?.commitSha?.slice(0, 8) }}{{ baseline()?.label ? ' - ' + baseline()?.label : '' }}</span>
+    }
+  </div>
+</section>
+
+@if (plan()) {
+  <section class="metrics">
+    <article>
+      <span>Workflow changes</span>
+      <strong>{{ plan()?.workflowChanges?.length }}</strong>
+    </article>
+    <article>
+      <span>Credential mappings</span>
+      <strong>{{ plan()?.credentialMappingsFound }} / {{ plan()?.credentialMappingsRequired }}</strong>
+    </article>
+    <article>
+      <span>Selected files</span>
+      <strong>{{ selectedCount() }}</strong>
+    </article>
+    <article>
+      <span>Conflicts</span>
+      <strong>{{ plan()?.conflictCount }} / {{ unresolvedConflictCount() }} unresolved</strong>
+    </article>
+  </section>
+
+  <section class="panel ai-panel stack-top">
+    <header>
+      <div>
+        <h2>AI Plan Review</h2>
+        <p class="empty">Use this to explain the plan. It cannot apply changes or choose merge resolutions for you.</p>
+      </div>
+    </header>
+    <div class="actions wrap-actions">
+      <button class="button" type="button" (click)="summarizePromotionPlan()" [disabled]="aiLoading()">Generate AI summary</button>
+      <button class="button" type="button" (click)="findPromotionRisks()" [disabled]="aiLoading()">Generate AI recommendations</button>
+      <button class="button" type="button" (click)="explainPromotionCredentials()" [disabled]="aiLoading()">Explain credentials</button>
+      <label class="check-line">
+        <input type="checkbox" [ngModel]="saveAiSummary()" (ngModelChange)="saveAiSummary.set($event)" />
+        <span>Save summary to audit log</span>
+      </label>
+    </div>
+    <div class="ai-chat">
+      <input [ngModel]="aiQuestion()" (ngModelChange)="aiQuestion.set($event)" placeholder="Ask about this promotion plan" />
+      <button class="button primary" type="button" (click)="askAi()" [disabled]="aiLoading()">Ask</button>
+    </div>
+    @if (aiAnswer()) {
+      <div class="ai-answer stack-top-small">
+        <header>
+          <strong>Confidence: {{ aiAnswer()?.confidence }}</strong>
+          @if (aiAnswer()?.suggestedResolution) {
+            <span class="status on">{{ aiAnswer()?.suggestedResolution }}</span>
+          }
+        </header>
+        <p>{{ aiAnswer()?.answer }}</p>
+        @if ((aiAnswer()?.risks?.length ?? 0) > 0) {
+          <h3>Risks</h3>
+          <ul>
+            @for (risk of aiAnswer()?.risks; track risk) {
+              <li>{{ risk }}</li>
+            }
+          </ul>
+        }
+        @if ((aiAnswer()?.blockingIssues?.length ?? 0) > 0) {
+          <h3>Blocking issues</h3>
+          <ul>
+            @for (issue of aiAnswer()?.blockingIssues; track issue) {
+              <li>{{ issue }}</li>
+            }
+          </ul>
+        }
+        @if ((aiAnswer()?.recommendedNextSteps?.length ?? 0) > 0) {
+          <h3>Recommended next steps</h3>
+          <ul>
+            @for (step of aiAnswer()?.recommendedNextSteps; track step) {
+              <li>{{ step }}</li>
+            }
+          </ul>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="panel stack-top">
+    <header>
+      <h2>Merge preview and apply</h2>
+      <div class="actions">
+        <button class="button" type="button" (click)="previewMerge()" [disabled]="previewing()">
+          {{ previewing() ? 'Previewing...' : 'Merge Preview' }}
+        </button>
+      <button class="button primary" type="button" (click)="apply()" [disabled]="!canApply()">
+          {{ applying() ? 'Applying...' : 'Apply resolved promotion' }}
+      </button>
+      </div>
+    </header>
+    <p class="empty">Apply revalidates resolutions server-side, checks credentials, checks out the target branch, writes remapped workflow JSON, and creates a promotion commit.</p>
+    @if (applyBlockers().length > 0) {
+      <div class="alert stack-top-small">
+        @for (blocker of applyBlockers(); track blocker) {
+          <p>{{ blocker }}</p>
+        }
+        @if (selectedCount() === 0 && plan()) {
+          <button class="button" type="button" (click)="scrollToWorkflowChanges()">Review workflow resolutions</button>
+        }
+      </div>
+    }
+    @if (unresolvedConflictCount() > 0) {
+      <div class="alert danger stack-top-small">Resolve every conflicted workflow before applying.</div>
+    }
+    @if (deleteTargetCount() > 0) {
+      <div class="alert danger stack-top-small">{{ deleteTargetCount() }} target workflow deletion(s) selected. Apply will confirm deletions server-side.</div>
+    }
+    @if (preview()) {
+      <div class="metrics stack-top-small">
+        <article>
+          <span>Write</span>
+          <strong>{{ preview()?.workflowsToWrite?.length }}</strong>
+        </article>
+        <article>
+          <span>Keep</span>
+          <strong>{{ preview()?.workflowsToKeep?.length }}</strong>
+        </article>
+        <article>
+          <span>Skip</span>
+          <strong>{{ preview()?.workflowsToSkip?.length }}</strong>
+        </article>
+        <article>
+          <span>Delete</span>
+          <strong>{{ preview()?.workflowsToDelete?.length }}</strong>
+        </article>
+      </div>
+      @if ((preview()?.blockingErrors?.length ?? 0) > 0) {
+        <div class="rows stack-top-small">
+          @for (blockingError of preview()?.blockingErrors; track blockingError) {
+            <div class="row danger-row"><span>{{ blockingError }}</span></div>
+          }
+        </div>
+      }
+    }
+  </section>
+
+  <section class="panel table-panel stack-top">
+    <header>
+      <h2>Missing credential mappings</h2>
+      <a routerLink="/mappings">Open mappings</a>
+    </header>
+    <table>
+      <thead>
+        <tr>
+          <th>Workflow</th>
+          <th>Credential</th>
+          <th>Type</th>
+          <th>ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (missing of plan()?.missingMappings; track missing.workflowFilePath + missing.credentialType + missing.credentialId) {
+          <tr>
+            <td>{{ missing.workflowName }}</td>
+            <td>{{ missing.credentialName ?? 'Unnamed' }}</td>
+            <td><code>{{ missing.credentialType }}</code></td>
+            <td><code>{{ missing.credentialId ?? 'No id' }}</code></td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="4">All selected workflow credentials have target mappings.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+
+  <section class="split stack-top">
+    <div class="panel">
+      <header>
+        <h2>Warnings</h2>
+      </header>
+      <div class="rows">
+        @for (warning of plan()?.warnings; track warning) {
+          <div class="row"><span>{{ warning }}</span></div>
+        } @empty {
+          <p class="empty">No warnings.</p>
+        }
+      </div>
+    </div>
+
+    <div class="panel">
+      <header>
+        <h2>Blocking errors</h2>
+      </header>
+      <div class="rows">
+        @for (blockingError of plan()?.blockingErrors; track blockingError) {
+          <div class="row danger-row"><span>{{ blockingError }}</span></div>
+        } @empty {
+          <p class="empty">No blocking errors.</p>
+        }
+      </div>
+    </div>
+  </section>
+
+  <section id="workflow-changes" class="panel table-panel promotion-workflow-panel stack-top">
+    <header>
+      <h2>Workflow changes</h2>
+      <span>Generated {{ plan()?.generatedAt | date: 'short' }}</span>
+    </header>
+    <table>
+      <thead>
+        <tr>
+          <th>Resolution</th>
+          <th>Change</th>
+          <th>Workflow</th>
+          <th>File</th>
+          <th>Semantic summary</th>
+          <th>Summary</th>
+          <th>Conflict</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (change of plan()?.workflowChanges; track change.workflowFilePath) {
+          <tr>
+            <td class="apply-cell">
+              <select
+                [disabled]="!isSelectable(change.changeType)"
+                [ngModel]="resolutionFor(change)"
+                (ngModelChange)="setResolution(change, $event)">
+                @if (change.isConflict && !resolutionFor(change)) {
+                  <option value="">Resolve...</option>
+                }
+                @for (resolution of change.availableResolutions; track resolution) {
+                  <option [value]="resolution">
+                    {{ resolution === 'use-source' ? 'Use source' : resolution === 'keep-target' ? 'Keep target' : resolution === 'delete-target' ? 'Delete target' : 'Skip' }}
+                  </option>
+                }
+              </select>
+            </td>
+            <td class="change-cell"><span class="status" [class.on]="change.changeType === 'added' || change.changeType === 'modified' || change.changeType === 'source-only' || change.changeType === 'different' || change.changeType === 'manual-merge'">{{ change.changeType }}</span></td>
+            <td class="workflow-name-cell">{{ change.workflowName }}</td>
+            <td class="workflow-file-cell"><code>{{ change.workflowFilePath }}</code></td>
+            <td class="semantic-cell">
+              @if (change.semanticSummary) {
+                <span class="pill">+{{ change.semanticSummary.addedNodes }} nodes</span>
+                <span class="pill">-{{ change.semanticSummary.removedNodes }} nodes</span>
+                <span class="pill">{{ change.semanticSummary.modifiedNodes }} modified</span>
+                <span class="pill">{{ change.semanticSummary.changedCredentials }} credentials</span>
+                <span class="pill">{{ change.semanticSummary.changedConnections }} connections</span>
+                <span class="pill">{{ change.semanticSummary.changedWorkflowSettings }} settings</span>
+                @if (change.semanticDiff) {
+                  <button class="status semantic-open-diff" type="button" [class.on]="workflowHasVisibleChanges(change.semanticDiff)" (click)="selectWorkflowDiff(change)">
+                    {{ workflowHasVisibleChanges(change.semanticDiff) ? 'open diff' : 'no changes' }}
+                  </button>
+                }
+                @if (change.changeType !== 'unchanged') {
+                  <a
+                    class="button"
+                    routerLink="/manual-merge"
+                    [queryParams]="{ source: sourceKey(), target: targetKey(), path: change.workflowFilePath, sourceCommitSha: plan()?.sourceCommitSha, targetCommitSha: plan()?.targetCommitSha }">
+                    Manual Merge
+                  </a>
+                }
+              } @else {
+                <span class="empty">No semantic summary</span>
+              }
+            </td>
+            <td class="summary-cell">{{ change.summary }}</td>
+            <td class="conflict-cell">
+              @if (change.changeType === 'conflict') {
+                <span class="status danger">conflict</span>
+                <div class="resolution-suggestion-anchor">
+                  <button class="button" type="button" (click)="suggestResolution(change)" [disabled]="isResolutionSuggestionLoading(change)">
+                    {{ isResolutionSuggestionLoading(change) ? 'Thinking...' : 'Suggest resolution' }}
+                  </button>
+                  @if (isResolutionSuggestionOpen(change)) {
+                    <section class="resolution-suggestion-popover" role="dialog" aria-label="Suggested resolution">
+                      <header>
+                        <strong>Suggested resolution</strong>
+                        <button class="icon-button" type="button" (click)="closeResolutionSuggestion()" aria-label="Close suggestion">x</button>
+                      </header>
+                      @if (isResolutionSuggestionLoading(change)) {
+                        <p class="empty"><span class="spinner" aria-hidden="true"></span> Reviewing conflict...</p>
+                      } @else if (resolutionSuggestionErrorFor(change)) {
+                        <div class="alert danger">{{ resolutionSuggestionErrorFor(change) }}</div>
+                      } @else if (resolutionSuggestionFor(change); as suggestion) {
+                        @if (suggestion.suggestedResolution) {
+                          <span class="status on">{{ suggestion.suggestedResolution }}</span>
+                        }
+                        <p>{{ suggestion.answer }}</p>
+                        @if (suggestion.reasoning) {
+                          <h3>Reasoning</h3>
+                          <p>{{ suggestion.reasoning }}</p>
+                        }
+                        @if (suggestion.risks.length > 0) {
+                          <h3>Risks</h3>
+                          <ul>
+                            @for (risk of suggestion.risks; track risk) {
+                              <li>{{ risk }}</li>
+                            }
+                          </ul>
+                        }
+                        @if (suggestion.recommendedNextSteps.length > 0) {
+                          <h3>Next steps</h3>
+                          <ul>
+                            @for (step of suggestion.recommendedNextSteps; track step) {
+                              <li>{{ step }}</li>
+                            }
+                          </ul>
+                        }
+                      }
+                    </section>
+                  }
+                </div>
+              }
+            </td>
+          </tr>
+          @if (change.conflictDetails) {
+            <tr>
+              <td colspan="7">
+                <details class="detail-row">
+                  <summary>Conflict details and semantic diff panels</summary>
+                  <p class="empty">{{ change.conflictDetails.conflictReason }}</p>
+                  <div class="rows">
+                    <div class="row">
+                      <span>Base</span>
+                      <code>{{ change.conflictDetails.baseCommitSha ?? 'No merge base' }}</code>
+                    </div>
+                    <div class="row">
+                      <span>Source</span>
+                      <code>{{ change.conflictDetails.sourceCommitSha ?? 'No source commit' }}</code>
+                    </div>
+                    <div class="row">
+                      <span>Target</span>
+                      <code>{{ change.conflictDetails.targetCommitSha ?? 'No target commit' }}</code>
+                    </div>
+                  </div>
+                  <div class="split stack-top-small">
+                    <div class="panel">
+                      <h3>Source changes</h3>
+                      <p>{{ diffTitle(change.conflictDetails.sourceVsBase, 'No source diff') }}</p>
+                    </div>
+                    <div class="panel">
+                      <h3>Target changes</h3>
+                      <p>{{ diffTitle(change.conflictDetails.targetVsBase, 'No target diff') }}</p>
+                    </div>
+                    <div class="panel">
+                      <h3>Source vs Target</h3>
+                      <p>{{ diffTitle(change.conflictDetails.sourceVsTarget, 'No source-target diff') }}</p>
+                    </div>
+                  </div>
+                  <details class="detail-row stack-top-small">
+                    <summary>Advanced raw semantic diff</summary>
+                    <pre>{{ change.conflictDetails | json }}</pre>
+                  </details>
+                </details>
+              </td>
+            </tr>
+          }
+        } @empty {
+          <tr>
+            <td colspan="7">No workflow changes found.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </section>
+}
+
+@if (result()) {
+  <section class="panel stack-top">
+    <h2>Promotion result</h2>
+    <dl class="result-grid">
+      <div>
+        <dt>Commit</dt>
+        <dd>{{ result()?.commitSha ?? 'No commit created' }}</dd>
+      </div>
+      <div>
+        <dt>Commit message</dt>
+        <dd>{{ result()?.commitMessage ?? 'No commit created' }}</dd>
+      </div>
+      <div>
+        <dt>Applied files</dt>
+        <dd>{{ result()?.appliedFilesCount }}</dd>
+      </div>
+      <div>
+        <dt>Deleted files</dt>
+        <dd>{{ result()?.deletedFiles?.length }}</dd>
+      </div>
+      <div>
+        <dt>Skipped files</dt>
+        <dd>{{ result()?.skippedFiles?.length }}</dd>
+      </div>
+    </dl>
+    @if (result()?.commitSha) {
+      <a class="button" [routerLink]="['/diff', result()?.commitSha]" [queryParams]="{ environment: targetKey() }">View promotion diff</a>
+    }
+  </section>
+}

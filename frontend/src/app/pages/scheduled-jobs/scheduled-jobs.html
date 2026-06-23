@@ -1,0 +1,238 @@
+<section class="page-header">
+  <div>
+    <h1>Scheduled Jobs</h1>
+    <p>Run recurring exports and backups against a selected environment branch.</p>
+  </div>
+  <a class="button" href="http://localhost:5107/hangfire" target="_blank" rel="noreferrer">Hangfire dashboard</a>
+</section>
+
+<section class="alert danger docker-warning">
+  To export workflows from a Docker container, this app may need access to the Docker socket or Docker CLI. Mounting <code>/var/run/docker.sock</code> gives this app high privileges on the host. Use only on trusted self-hosted servers.
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (message()) {
+  <div class="alert">{{ message() }}</div>
+}
+
+<section class="split scheduled-layout">
+  <div class="panel">
+    <header>
+      <h2>{{ editingId() ? 'Edit scheduled job' : 'New scheduled job' }}</h2>
+      @if (editingId()) {
+        <button class="button" type="button" (click)="reset()">Cancel</button>
+      }
+    </header>
+
+    <div class="form-grid">
+      <label>
+        <span>Name</span>
+        <input [(ngModel)]="form.name" placeholder="Daily n8n export" />
+      </label>
+      <label>
+        <span>Job type</span>
+        <select [(ngModel)]="form.jobType">
+          @for (type of jobTypes; track type.value) {
+            <option [value]="type.value">{{ type.label }}</option>
+          }
+        </select>
+      </label>
+      <label>
+        <span>Environment</span>
+        <select [(ngModel)]="form.environmentId">
+          @for (environment of environments(); track environment.id) {
+            <option [value]="environment.id">{{ environment.name }} ({{ environment.gitBranch }})</option>
+          }
+        </select>
+      </label>
+      <label>
+        <span>Timezone</span>
+        <select [(ngModel)]="form.timezone">
+          @for (timezone of timezones; track timezone) {
+            <option [value]="timezone">{{ timezone }}</option>
+          }
+        </select>
+      </label>
+
+      @if (form.jobType === 'DockerN8nWorkflowExport') {
+        <label>
+          <span>Container name</span>
+          <input [(ngModel)]="form.containerName" placeholder="n8n" />
+        </label>
+      } @else if (form.jobType === 'WorkspaceBackup') {
+        <label class="check-line">
+          <input type="checkbox" [(ngModel)]="form.includeGitRepo" />
+          <span>Include Git repository</span>
+        </label>
+        <label class="check-line">
+          <input type="checkbox" [(ngModel)]="form.includeDatabase" />
+          <span>Include SQLite metadata</span>
+        </label>
+        <label>
+          <span>Retention count</span>
+          <input type="number" min="1" max="100" [(ngModel)]="form.retentionCount" />
+        </label>
+      } @else {
+        <div class="alert">Uses the configured n8n public API connection for this environment. The job only fetches workflows; it never modifies n8n.</div>
+      }
+
+      <label class="check-line">
+        <input type="checkbox" [(ngModel)]="form.isEnabled" />
+        <span>Enabled</span>
+      </label>
+    </div>
+
+    <div class="schedule-builder">
+      <div class="view-tabs">
+        <button class="button" type="button" [class.primary]="scheduleMode === 'hourly'" (click)="scheduleMode = 'hourly'">Hourly</button>
+        <button class="button" type="button" [class.primary]="scheduleMode === 'daily'" (click)="scheduleMode = 'daily'">Daily</button>
+        <button class="button" type="button" [class.primary]="scheduleMode === 'weekly'" (click)="scheduleMode = 'weekly'">Weekly</button>
+        <button class="button" type="button" [class.primary]="scheduleMode === 'custom'" (click)="scheduleMode = 'custom'">Custom</button>
+      </div>
+
+      @if (scheduleMode === 'daily' || scheduleMode === 'weekly') {
+        <label>
+          <span>Run time</span>
+          <input type="time" [(ngModel)]="scheduleTime" />
+        </label>
+      }
+      @if (scheduleMode === 'weekly') {
+        <label>
+          <span>Weekday</span>
+          <select [(ngModel)]="weeklyDay">
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+            <option value="0">Sunday</option>
+          </select>
+        </label>
+      }
+      @if (scheduleMode === 'custom') {
+        <label>
+          <span>Cron expression</span>
+          <input [(ngModel)]="customCron" placeholder="0 21 * * *" />
+        </label>
+      }
+      <div class="cron-preview">
+        <span>Cron</span>
+        <code>{{ cronPreview() }}</code>
+      </div>
+    </div>
+
+    <button class="button primary stack-top-small" type="button" (click)="save()">Save scheduled job</button>
+  </div>
+
+  <div class="panel table-panel">
+    <header>
+      <h2>Configured jobs</h2>
+      <button class="button" type="button" (click)="loadJobs()">Refresh</button>
+    </header>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Environment</th>
+          <th>Schedule</th>
+          <th>Last</th>
+          <th>Next</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (job of jobs(); track job.id) {
+          <tr>
+            <td>
+              <strong>{{ job.name }}</strong>
+              <span class="status" [class.on]="job.isEnabled">{{ job.isEnabled ? 'enabled' : 'disabled' }}</span>
+            </td>
+            <td>{{ job.environmentName }}</td>
+            <td><code>{{ job.cronExpression }}</code></td>
+            <td>{{ job.lastRunStatus ?? 'Never' }}</td>
+            <td>{{ job.nextRunAt ? (job.nextRunAt | date:'short') : 'Not scheduled' }}</td>
+            <td class="actions wrap-actions">
+              <button class="button" type="button" (click)="edit(job)">Edit</button>
+              <button class="button" type="button" (click)="loadRuns(job)">Runs</button>
+              <button class="button" type="button" (click)="runNow(job)" [disabled]="busyId() === job.id">{{ busyId() === job.id ? 'Queued...' : 'Run now' }}</button>
+              <button class="button" type="button" (click)="toggle(job)" [disabled]="busyId() === job.id">{{ job.isEnabled ? 'Disable' : 'Enable' }}</button>
+              <button class="button danger-text" type="button" (click)="remove(job)" [disabled]="busyId() === job.id">Delete</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6">No scheduled jobs yet.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>
+
+@if (selectedJob()) {
+  <section class="split stack-top">
+    <div class="panel table-panel">
+      <header>
+        <h2>Run history - {{ selectedJob()?.name }}</h2>
+        @if (loadingRuns()) {
+          <span class="spinner"></span>
+        }
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Started</th>
+            <th>Status</th>
+            <th>Commit</th>
+            <th>Finished</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (run of runs(); track run.id) {
+            <tr class="clickable-row" (click)="openRun(run)">
+              <td>{{ run.startedAt | date:'short' }}</td>
+              <td><span class="status" [class.on]="run.status === 'success'" [class.warning]="run.status === 'failed'">{{ run.status }}</span></td>
+              <td>{{ run.commitSha ?? 'None' }}</td>
+              <td>{{ run.finishedAt ? (run.finishedAt | date:'short') : 'Running' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="4">No runs recorded.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <header>
+        <h2>Run details</h2>
+        @if (selectedRun()?.commitSha) {
+          <a [routerLink]="['/diff', selectedRun()?.commitSha]" [queryParams]="{ environment: selectedJob()?.environmentKey }">View diff</a>
+        }
+      </header>
+      @if (selectedRun()) {
+        <dl class="result-grid docker-result-grid">
+          <div>
+            <dt>Status</dt>
+            <dd>{{ selectedRun()?.status }}</dd>
+          </div>
+          <div>
+            <dt>Error</dt>
+            <dd>{{ selectedRun()?.errorMessage ?? 'None' }}</dd>
+          </div>
+          <div>
+            <dt>Commit SHA</dt>
+            <dd>{{ selectedRun()?.commitSha ?? 'No commit created' }}</dd>
+          </div>
+        </dl>
+        <pre>{{ selectedRun()?.logs?.join('\n') }}</pre>
+      } @else {
+        <p class="empty">Select a run to inspect logs, errors, and result data.</p>
+      }
+    </div>
+  </section>
+}

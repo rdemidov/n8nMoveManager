@@ -1,0 +1,30 @@
+name: n8n-move-manager
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Api/Dockerfile
+    environment:
+      Auth__Enabled: ${AUTH_ENABLED:?Set AUTH_ENABLED in .env}
+      Auth__SigningKey: ${AUTH_SIGNING_KEY:?Set AUTH_SIGNING_KEY in .env}
+      Auth__BootstrapAdminUser: ${AUTH_BOOTSTRAP_ADMIN_USER:?Set AUTH_BOOTSTRAP_ADMIN_USER in .env}
+      Auth__BootstrapAdminPassword: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:?Set AUTH_BOOTSTRAP_ADMIN_PASSWORD in .env}
+    volumes:
+      - app-data:/app/App_Data
+    ports:
+      - "127.0.0.1:${API_PORT:-5107}:5107"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-4300}:4300"
+    restart: unless-stopped
+
+volumes:
+  app-data:

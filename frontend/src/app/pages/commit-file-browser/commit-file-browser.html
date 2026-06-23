@@ -1,0 +1,108 @@
+<section class="page-header">
+  <div>
+    <h1>Commit File Browser</h1>
+    <p>Browse workflow JSON files exactly as they existed at a selected commit.</p>
+  </div>
+  <div class="actions wrap-actions">
+    <a class="button" routerLink="/history" [queryParams]="{ environment: api.selectedEnvironmentKey() }">History</a>
+    <a class="button" [routerLink]="['/restore/preview', commitSha()]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Restore preview</a>
+  </div>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (loading()) {
+  <div class="alert loading-alert"><span class="spinner"></span> Loading commit files...</div>
+}
+@if (restoreResult()) {
+  <div class="alert">
+    Restored <strong>{{ restoreResult()?.filePath }}</strong>.
+    @if (restoreResult()?.newCommitSha) {
+      New commit <code>{{ restoreResult()?.newCommitSha }}</code>.
+    }
+  </div>
+}
+@if (backupResult()) {
+  <div class="alert">
+    Backup created:
+    <a [href]="api.getBackupDownloadUrl(backupResult()!.id)"><strong>{{ backupResult()?.fileName }}</strong></a>
+  </div>
+}
+
+<section class="panel commit-browser-toolbar">
+  <label>
+    <span>Commit</span>
+    <select [ngModel]="commitSha()" (ngModelChange)="selectCommit($event)">
+      @for (commit of commits(); track commit.sha) {
+        <option [value]="commit.sha">{{ commit.shortSha }} - {{ commit.message }} - {{ commit.when | date: 'short' }}</option>
+      }
+    </select>
+  </label>
+  <div class="backup-options">
+    <label class="check-line">
+      <input type="checkbox" [(ngModel)]="includeMetadata">
+      Include manifest
+    </label>
+    <label class="check-line">
+      <input type="checkbox" [(ngModel)]="includeDatabaseSnapshot">
+      Request database snapshot
+    </label>
+    <button class="button primary" type="button" (click)="createBackup()" [disabled]="creatingBackup() || !commitSha()">
+      {{ creatingBackup() ? 'Creating...' : 'Create ZIP backup' }}
+    </button>
+  </div>
+</section>
+
+<section class="split wide-left">
+  <section class="panel">
+    <header>
+      <h2>Workflow files</h2>
+      <span class="status">{{ files().length }} files</span>
+    </header>
+    <div class="rows">
+      @for (file of files(); track file.filePath) {
+        <button class="row link-row file-row" type="button" [class.selected]="selectedFile()?.filePath === file.filePath" (click)="openFile(file.filePath)">
+          <div>
+            <strong>{{ file.fileName }}</strong>
+            <small>{{ file.filePath }}</small>
+          </div>
+          <span>{{ file.sizeBytes }} bytes</span>
+        </button>
+      } @empty {
+        <p class="empty">No workflow files found at this commit.</p>
+      }
+    </div>
+  </section>
+
+  <section class="panel">
+    <header>
+      <div>
+        <h2>{{ selectedFile()?.filePath ?? 'Select a workflow' }}</h2>
+        @if (selectedFile()) {
+          <small>Commit <code>{{ commitSha() }}</code></small>
+        }
+      </div>
+      @if (selectedFile()) {
+        <div class="actions wrap-actions">
+          <a class="button" [href]="downloadUrl(selectedFile()!.filePath)" download>Download JSON</a>
+        </div>
+      }
+    </header>
+
+    @if (selectedFile()) {
+      <div class="restore-inline">
+        <label class="check-line">
+          <input type="checkbox" [(ngModel)]="confirmRestoreWorkflow">
+          Confirm single workflow restore
+        </label>
+        <button class="button primary" type="button" (click)="restoreSelectedWorkflow()" [disabled]="!confirmRestoreWorkflow || restoring()">
+          {{ restoring() ? 'Restoring...' : 'Restore workflow' }}
+        </button>
+      </div>
+      <pre>{{ selectedFile()?.content }}</pre>
+    } @else {
+      <p class="empty">Choose a file to preview, download, or restore.</p>
+    }
+  </section>
+</section>

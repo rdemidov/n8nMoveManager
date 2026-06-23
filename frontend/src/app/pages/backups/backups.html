@@ -1,0 +1,48 @@
+<section class="page-header">
+  <div>
+    <h1>Backups</h1>
+    <p>ZIP backups generated from workflow commits.</p>
+  </div>
+  <a class="button" routerLink="/history" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Create from history</a>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (loading()) {
+  <div class="alert loading-alert"><span class="spinner"></span> Loading backups...</div>
+}
+
+<section class="panel table-panel">
+  <table>
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Created</th>
+        <th>Size</th>
+        <th>Path</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (backup of backups(); track backup.id) {
+        <tr>
+          <td><strong>{{ backup.fileName }}</strong></td>
+          <td>{{ backup.createdAt | date: 'medium' }}</td>
+          <td>{{ backup.sizeBytes }} bytes</td>
+          <td><code>{{ backup.filePath }}</code></td>
+          <td>
+            <div class="actions wrap-actions">
+              <a class="button" [href]="api.getBackupDownloadUrl(backup.id)">Download</a>
+              <button class="button danger-text" type="button" (click)="deleteBackup(backup)">Delete</button>
+            </div>
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="5"><p class="empty">No backups yet. Open a commit and create a ZIP backup.</p></td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</section>

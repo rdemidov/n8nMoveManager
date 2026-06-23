@@ -1,0 +1,103 @@
+<section class="page-header">
+  <div>
+    <h1>Restore Preview</h1>
+    <p>Compare the current environment to the selected commit before creating a restore commit.</p>
+  </div>
+  <div class="actions wrap-actions">
+    <a class="button" [routerLink]="['/commits', commitSha(), 'files']" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Browse files</a>
+    <a class="button" routerLink="/history" [queryParams]="{ environment: api.selectedEnvironmentKey() }">History</a>
+  </div>
+</section>
+
+@if (error()) {
+  <div class="alert danger">{{ error() }}</div>
+}
+@if (loading()) {
+  <div class="alert loading-alert"><span class="spinner"></span> Building restore preview...</div>
+}
+@if (result()) {
+  <div class="alert">
+    Restore committed.
+    @if (result()?.newCommitSha) {
+      New commit <code>{{ result()?.newCommitSha }}</code>.
+    }
+    Restored {{ result()?.restoredFilesCount }} files and deleted {{ result()?.deletedFilesCount }} files.
+  </div>
+}
+
+@if (preview()) {
+  <section class="metrics">
+    <article>
+      <span>Add</span>
+      <strong>{{ preview()?.filesToAdd?.length ?? 0 }}</strong>
+    </article>
+    <article>
+      <span>Modify</span>
+      <strong>{{ preview()?.filesToModify?.length ?? 0 }}</strong>
+    </article>
+    <article>
+      <span>Optional deletes</span>
+      <strong>{{ preview()?.filesThatWouldBeDeleted?.length ?? 0 }}</strong>
+    </article>
+  </section>
+
+  <section class="panel restore-controls">
+    <header>
+      <div>
+        <h2>{{ preview()?.selectedCommit?.shortSha }} - {{ preview()?.selectedCommit?.message }}</h2>
+        <small>Selected commit date: {{ preview()?.selectedCommit?.when | date: 'medium' }}</small>
+      </div>
+      <span class="status warning">Creates a new commit</span>
+    </header>
+    @for (warning of preview()?.warnings ?? []; track warning) {
+      <div class="alert">{{ warning }}</div>
+    }
+    <div class="restore-inline">
+      <label class="check-line">
+        <input type="checkbox" [(ngModel)]="includeDeletedFiles">
+        Delete current files absent from selected commit
+      </label>
+      <label class="check-line">
+        <input type="checkbox" [(ngModel)]="confirmRestore">
+        Confirm environment restore
+      </label>
+      <button class="button primary" type="button" (click)="applyRestore()" [disabled]="!confirmRestore || applying()">
+        {{ applying() ? 'Restoring...' : 'Restore environment' }}
+      </button>
+    </div>
+  </section>
+
+  <section class="split">
+    <section class="panel">
+      <header><h2>Files to add</h2></header>
+      <div class="rows compact-list">
+        @for (file of preview()?.filesToAdd ?? []; track file) {
+          <code>{{ file }}</code>
+        } @empty {
+          <p class="empty">No added files.</p>
+        }
+      </div>
+    </section>
+    <section class="panel">
+      <header><h2>Files to modify</h2></header>
+      <div class="rows compact-list">
+        @for (file of preview()?.filesToModify ?? []; track file) {
+          <code>{{ file }}</code>
+        } @empty {
+          <p class="empty">No modified files.</p>
+        }
+      </div>
+    </section>
+  </section>
+
+  <section class="panel stack-top">
+    <header><h2>Files that can be deleted</h2></header>
+    <div class="rows compact-list">
+      @for (file of preview()?.filesThatWouldBeDeleted ?? []; track file) {
+        <code>{{ file }}</code>
+      } @empty {
+        <p class="empty">No delete candidates.</p>
+      }
+    </div>
+  </section>
+}

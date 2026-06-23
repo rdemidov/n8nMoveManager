@@ -1,0 +1,69 @@
+<section class="page-header">
+  <div>
+    <h1>Dashboard · {{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }}</h1>
+    <p>Showing <code>{{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</code>. Import exported n8n workflows, commit every change, and inspect the Git diff trail.</p>
+  </div>
+  <a routerLink="/upload" [queryParams]="{ environment: api.selectedEnvironmentKey() }" class="button primary">Upload JSON</a>
+</section>
+
+@if (error()) {
+  <div class="alert">{{ error() }}</div>
+}
+
+<section class="metrics">
+  <article>
+    <span>Workflows</span>
+    <strong>{{ workflows().length }}</strong>
+  </article>
+  <article>
+    <span>Recent commits</span>
+    <strong>{{ commits().length }}</strong>
+  </article>
+  <article>
+    <span>Storage</span>
+    <strong>SQLite + Git</strong>
+  </article>
+</section>
+
+<section class="split">
+  <div class="panel">
+    <header>
+      <h2>Latest workflows</h2>
+      <a routerLink="/workflows" [queryParams]="{ environment: api.selectedEnvironmentKey() }">View all</a>
+    </header>
+    <div class="rows">
+      @for (workflow of workflows().slice(0, 5); track workflow.filePath) {
+        <div class="row">
+          <div>
+            <strong>{{ workflow.name }}</strong>
+            <span>{{ workflow.nodesCount }} nodes</span>
+          </div>
+          <span class="status" [class.on]="workflow.active">{{ workflow.active ? 'active' : 'inactive' }}</span>
+        </div>
+      } @empty {
+        <p class="empty">No workflows imported yet.</p>
+      }
+    </div>
+  </div>
+
+  <div class="panel">
+    <header>
+      <h2>Recent commits</h2>
+      <a routerLink="/history" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Open history</a>
+    </header>
+    <div class="rows">
+      @for (commit of commits(); track commit.sha) {
+        <a class="row link-row" [routerLink]="['/diff', commit.sha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">
+          <div>
+            <strong>{{ commit.shortSha }}</strong>
+            <span>{{ commit.message }}</span>
+            <small>{{ api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey() }} · {{ api.selectedEnvironment()?.gitBranch ?? 'unknown branch' }}</small>
+          </div>
+          <span>{{ commit.when | date: 'short' }}</span>
+        </a>
+      } @empty {
+        <p class="empty">No commits yet.</p>
+      }
+    </div>
+  </div>
+</section>
