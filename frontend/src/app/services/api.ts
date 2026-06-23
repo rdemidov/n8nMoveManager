@@ -103,6 +103,34 @@ export interface WorkflowApiSyncResult {
   warnings: string[];
 }
 
+export interface WorkflowDeploymentItem {
+  workflowFilePath: string;
+  name: string;
+  targetWorkflowId: string | null;
+  action: 'create' | 'update';
+  warnings: string[];
+}
+
+export interface WorkflowDeploymentPreview {
+  sourceEnvironmentKey: string;
+  targetEnvironmentKey: string;
+  workflows: WorkflowDeploymentItem[];
+  blockingErrors: string[];
+}
+
+export interface WorkflowDeploymentResult {
+  targetEnvironmentKey: string;
+  createdWorkflowIds: string[];
+  updatedWorkflowIds: string[];
+  warnings: string[];
+}
+
+export interface DataTableLiveDeployResult {
+  targetEnvironmentKey: string;
+  deployedCount: number;
+  deployedTableIds: string[];
+}
+
 export interface WorkflowApiReconciliationItem {
   workflowId: string | null;
   name: string;
@@ -847,6 +875,14 @@ export class ApiService {
     return this.http.post<WorkflowApiSyncResult>(`${this.baseUrl}/environments/${environmentKey}/n8n-api/sync-workflows/selected`, { workflowIds });
   }
 
+  previewWorkflowDeployment(request: { sourceEnvironmentKey: string; targetEnvironmentKey: string; workflowFilePaths: string[] }): Observable<WorkflowDeploymentPreview> {
+    return this.http.post<WorkflowDeploymentPreview>(`${this.baseUrl}/workflows/deployment/preview`, request);
+  }
+
+  deployWorkflows(request: { sourceEnvironmentKey: string; targetEnvironmentKey: string; workflowFilePaths: string[]; confirmation: boolean; activateWorkflows: boolean }): Observable<WorkflowDeploymentResult> {
+    return this.http.post<WorkflowDeploymentResult>(`${this.baseUrl}/workflows/deployment/deploy`, request);
+  }
+
   getDataTables(environmentKey = this.selectedEnvironmentKey(), page = 1, pageSize = 25, search = '', sort = 'name', direction = 'asc'): Observable<PagedResult<DataTableItem>> {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), sort, direction });
     if (search.trim()) params.set('search', search.trim());
@@ -867,6 +903,10 @@ export class ApiService {
 
   stageDataTablePromotion(sourceEnvironmentKey: string, targetEnvironmentKey: string, tableIds: string[]): Observable<DataTablePromotionApplyResult> {
     return this.http.post<DataTablePromotionApplyResult>(`${this.baseUrl}/data-tables/promotions/stage`, { sourceEnvironmentKey, targetEnvironmentKey, tableIds, confirmation: true });
+  }
+
+  deployDataTableSchemas(request: { sourceEnvironmentKey: string; targetEnvironmentKey: string; tableIds: string[]; confirmation: boolean }): Observable<DataTableLiveDeployResult> {
+    return this.http.post<DataTableLiveDeployResult>(`${this.baseUrl}/data-tables/promotions/deploy-live`, request);
   }
 
   uploadFiles(files: FileList, environmentKey = this.selectedEnvironmentKey(), commitMessage?: string | null): Observable<UploadResult> {

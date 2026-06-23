@@ -2,6 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService, DataTableComparison, DataTableItem, DataTablePromotionPlan, N8nApiConfigRequest } from '../../services/api';
+import { ConfirmationService } from '../../services/confirmation';
 
 @Component({
   selector: 'app-data-tables',
@@ -19,6 +20,7 @@ export class DataTablesComponent {
   syncing = signal(false);
   syncingWorkflows = signal(false);
   staging = signal(false);
+  deploying = signal(false);
   error = signal<string | null>(null);
   message = signal<string | null>(null);
   search = '';
@@ -27,7 +29,7 @@ export class DataTablesComponent {
   apiKey = '';
   form: N8nApiConfigRequest = { enabled: false, baseUrl: '', dataTablesPath: '/api/v1/data-tables', dataTablesWritePathTemplate: '', workflowApiPath: '/api/v1/workflows', apiKey: '' };
 
-  constructor(readonly api: ApiService) {
+  constructor(readonly api: ApiService, private readonly confirmation: ConfirmationService) {
     effect(() => {
       this.api.selectedEnvironmentKey();
       this.page.set(1);
@@ -111,6 +113,24 @@ export class DataTablesComponent {
     this.api.stageDataTablePromotion(this.api.selectedEnvironmentKey(), this.targetEnvironment, selected).subscribe({
       next: (result) => { this.message.set(result.skippedCommit ? 'No target schema changes were needed.' : `Staged ${result.stagedTablesCount} schema snapshot(s) in ${result.targetEnvironmentKey}.`); this.staging.set(false); this.loadPromotionPlan(); },
       error: (response) => { this.error.set(response?.error?.error ?? 'Could not stage the promotion.'); this.staging.set(false); },
+    });
+  }
+
+  async deploySelectedSchemas(): Promise<void> {
+    const selected = this.selectedTableIds();
+    if (!this.targetEnvironment || selected.length === 0 || this.deploying()) return;
+    if (!await this.confirmation.confirm({
+      title: 'Deploy selected Data Table schemas?',
+      message: `This will update ${selected.length} schema(s) in ${this.targetEnvironment} through its n8n API. Table rows are not copied.`,
+      confirmLabel: 'Deploy schemas',
+      danger: true,
+    })) return;
+
+    this.deploying.set(true);
+    this.error.set(null);
+    this.api.deployDataTableSchemas({ sourceEnvironmentKey: this.api.selectedEnvironmentKey(), targetEnvironmentKey: this.targetEnvironment, tableIds: selected, confirmation: true }).subscribe({
+      next: (result) => { this.message.set(`Deployed ${result.deployedCount} Data Table schema(s) to ${result.targetEnvironmentKey}.`); this.deploying.set(false); },
+      error: (response) => { this.error.set(response?.error?.error ?? 'Could not deploy Data Table schemas.'); this.deploying.set(false); },
     });
   }
 

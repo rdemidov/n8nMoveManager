@@ -44,6 +44,22 @@
   }
 </app-ui-panel>
 
+<app-ui-panel class="stack-top">
+  <header><div><h2>Deploy changed workflows</h2><p class="empty">Select workflow snapshots below, preview target checks, then deploy through the target n8n API. Deployment never activates workflows.</p></div></header>
+  <div class="selector-grid">
+    <label><span>Source</span><input [value]="api.selectedEnvironment()?.name ?? api.selectedEnvironmentKey()" disabled /></label>
+    <label><span>Target</span><select [(ngModel)]="targetEnvironment" (change)="deploymentPreview.set(null)"><option value="">Choose an environment</option>@for (environment of api.environments(); track environment.key) { @if (environment.key !== api.selectedEnvironmentKey()) { <option [value]="environment.key">{{ environment.name }}</option> } }</select></label>
+    <button class="button primary" type="button" (click)="previewDeployment()" [disabled]="previewingDeployment() || selectedWorkflowCount() === 0">{{ previewingDeployment() ? 'Checking…' : 'Preview deployment' }}</button>
+  </div>
+  <p class="empty stack-top-small">{{ selectedWorkflowCount() }} workflow(s) selected.</p>
+  @if (deploymentPreview()) {
+    @if (deploymentPreview()?.blockingErrors?.length) { <div class="alert danger stack-top-small">{{ deploymentPreview()?.blockingErrors?.join(' ') }}</div> }
+    <dl class="result-grid stack-top-small"><div><dt>Create</dt><dd>{{ deploymentCreateCount() }}</dd></div><div><dt>Update</dt><dd>{{ deploymentUpdateCount() }}</dd></div></dl>
+    <button class="button primary stack-top-small" type="button" (click)="deploySelected()" [disabled]="deploying() || (deploymentPreview()?.blockingErrors?.length ?? 0) > 0">{{ deploying() ? 'Deploying…' : 'Deploy selected workflows' }}</button>
+  }
+  @if (deploymentResult()) { <div class="alert stack-top-small">Deployed {{ deploymentResult()?.createdWorkflowIds?.length ?? 0 }} new and {{ deploymentResult()?.updatedWorkflowIds?.length ?? 0 }} updated workflow(s) to {{ deploymentResult()?.targetEnvironmentKey }}.</div> }
+</app-ui-panel>
+
 @if (reconciliation()) {
   <app-ui-table class="panel stack-top">
     <header>
@@ -74,6 +90,7 @@
   <table>
     <thead>
       <tr>
+        <th>Deploy</th>
         <th>Name</th>
         <th>ID</th>
         <th>Status</th>
@@ -85,6 +102,7 @@
     <tbody>
       @for (workflow of workflows(); track workflow.filePath) {
         <tr>
+          <td><input type="checkbox" [checked]="isWorkflowSelected(workflow.filePath)" (change)="toggleWorkflow(workflow.filePath, $event)" /></td>
           <td>{{ workflow.name }}</td>
           <td>{{ workflow.id ?? 'n/a' }}</td>
           <td><span class="status" [class.on]="workflow.active">{{ workflow.active ? 'active' : 'inactive' }}</span></td>
@@ -94,7 +112,7 @@
         </tr>
       } @empty {
         <tr>
-          <td colspan="6" class="empty">No workflows imported yet.</td>
+          <td colspan="7" class="empty">No workflows imported yet.</td>
         </tr>
       }
     </tbody>

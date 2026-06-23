@@ -63,7 +63,7 @@
 
 @if (promotionPlan()) {
 <section class="panel table-panel stack-top">
-  <header><div><h2>Stage schema promotion</h2><p class="empty">{{ promotionPlan()?.safetyNotice }}</p></div><button class="button primary" type="button" (click)="stagePromotion()" [disabled]="staging() || selectedTableIds().length === 0">{{ staging() ? 'Staging…' : 'Stage selected schemas' }}</button></header>
+  <header><div><h2>Deploy changed schemas</h2><p class="empty">{{ promotionPlan()?.safetyNotice }} Live deployment updates schemas only; table rows are never copied.</p></div><div class="actions wrap-actions"><button class="button" type="button" (click)="stagePromotion()" [disabled]="staging() || selectedTableIds().length === 0">{{ staging() ? 'Staging…' : 'Stage selected schemas' }}</button><button class="button primary" type="button" (click)="deploySelectedSchemas()" [disabled]="deploying() || selectedTableIds().length === 0">{{ deploying() ? 'Deploying…' : 'Deploy selected schemas' }}</button></div></header>
   <table><thead><tr><th>Stage</th><th>Table</th><th>Change</th><th>Source rows</th><th>Target rows</th></tr></thead><tbody>
     @for (item of promotionPlan()?.changes ?? []; track item.id) { <tr><td><input type="checkbox" [checked]="selectedTableIds().includes(item.id)" (change)="toggleTable(item.id, $event)" /></td><td>{{ item.name }}</td><td><span class="status warning">{{ item.status }}</span></td><td>{{ item.sourceRowCount ?? 'unknown' }}</td><td>{{ item.targetRowCount ?? 'unknown' }}</td></tr> }
     @empty { <tr><td colspan="5" class="empty">No schema changes to stage.</td></tr> }
