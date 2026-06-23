@@ -757,7 +757,8 @@ export interface AiAssistantResponse {
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
-  private readonly baseUrl = 'http://localhost:5107/api';
+  // Use the same-origin proxy so the Docker deployment works from any browser.
+  private readonly baseUrl = '/api';
   readonly environments = signal<EnvironmentItem[]>([]);
   readonly selectedEnvironmentKey = signal('local');
   readonly selectedEnvironment = computed(() =>
