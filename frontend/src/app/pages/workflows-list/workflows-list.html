@@ -24,6 +24,13 @@
       <span class="status warning">not configured</span>
     }
   </header>
+  <div class="import-pipeline-strip">
+    <span>n8n API sync</span>
+    <strong>Normalize workflow JSON</strong>
+    <strong>Scan credential references</strong>
+    <strong>Commit Git snapshot</strong>
+    <strong>Enable merge and promotion</strong>
+  </div>
   <div class="actions wrap-actions">
     <button class="button primary" type="button" (click)="previewReconciliation()" [disabled]="previewing() || syncing() || !apiConfig()?.enabled || !apiConfig()?.hasApiKey">
       {{ previewing() ? 'Checking n8n…' : 'Preview n8n changes' }}

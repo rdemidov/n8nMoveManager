@@ -45,6 +45,32 @@ export class PromotionComponent implements OnInit {
   selectedCount = computed(() => this.selectedFiles().size);
   unresolvedConflictCount = computed(() => (this.plan()?.workflowChanges ?? []).filter((change) => change.isConflict && !this.resolutionFor(change)).length);
   deleteTargetCount = computed(() => this.workflowResolutions().filter((item) => item.resolution === 'delete-target').length);
+  previewActionGroups = computed(() => {
+    const preview = this.preview();
+    if (!preview) {
+      return [];
+    }
+
+    return [
+      { label: 'Write to target', status: 'write', paths: preview.workflowsToWrite },
+      { label: 'Keep target', status: 'keep', paths: preview.workflowsToKeep },
+      { label: 'Skip', status: 'skip', paths: preview.workflowsToSkip },
+      { label: 'Delete target', status: 'delete', paths: preview.workflowsToDelete },
+    ];
+  });
+  previewSemanticTotals = computed(() => {
+    const workflows = this.preview()?.semanticDiff.workflows ?? [];
+    return workflows.reduce(
+      (totals, workflow) => ({
+        addedNodes: totals.addedNodes + workflow.summary.addedNodes,
+        removedNodes: totals.removedNodes + workflow.summary.removedNodes,
+        modifiedNodes: totals.modifiedNodes + workflow.summary.modifiedNodes,
+        changedCredentials: totals.changedCredentials + workflow.summary.changedCredentials,
+        changedConnections: totals.changedConnections + workflow.summary.changedConnections,
+        changedWorkflowSettings: totals.changedWorkflowSettings + workflow.summary.changedWorkflowSettings,
+      }),
+      { addedNodes: 0, removedNodes: 0, modifiedNodes: 0, changedCredentials: 0, changedConnections: 0, changedWorkflowSettings: 0 });
+  });
   canApply = computed(() => Boolean(this.plan() && this.preview() && !this.hasBlockingErrors() && this.unresolvedConflictCount() === 0 && this.selectedCount() > 0 && !this.applying()));
   applyBlockers = computed(() => {
     const blockers: string[] = [];
@@ -270,6 +296,11 @@ export class PromotionComponent implements OnInit {
 
   nodeChangeCount(node: WorkflowSemanticDiff['nodeChanges'][number]): number {
     return node.parameterChanges.length + node.credentialChanges.length + node.metadataChanges.length;
+  }
+
+  workflowLabelForPath(path: string): string {
+    const change = (this.plan()?.workflowChanges ?? []).find((item) => item.workflowFilePath === path);
+    return change?.workflowName ?? path;
   }
 
   async apply(): Promise<void> {

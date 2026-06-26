@@ -48,11 +48,28 @@
         <h2>Result</h2>
         <span class="status" [class.on]="preview()?.validationStatus === 'valid'">{{ preview()?.validationStatus ?? 'not built' }}</span>
       </header>
+      <div class="result-flow" aria-label="Merge flow">
+        <span>{{ session()?.baseCommitSha ? 'Base' : 'Current snapshots' }}</span>
+        <strong>{{ session()?.sourceEnvironmentKey }}</strong>
+        <strong>Result</strong>
+        <strong>{{ session()?.targetEnvironmentKey }}</strong>
+      </div>
+      <div class="summary-grid result-summary-grid">
+        <span>Source nodes <strong>{{ nodeResolutionSummary().source }}</strong></span>
+        <span>Target nodes <strong>{{ nodeResolutionSummary().target }}</strong></span>
+        <span>Parameter merges <strong>{{ nodeResolutionSummary().parameterLevel }}</strong></span>
+        <span>Excluded <strong>{{ nodeResolutionSummary().excluded }}</strong></span>
+        <span>Mapped credentials <strong>{{ mappedCredentialCount() }}</strong></span>
+        <span>Missing mappings <strong>{{ missingCredentialCount() }}</strong></span>
+      </div>
       @if (preview()) {
-        <div class="summary-grid">
-          <span>Result vs Target nodes <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.modifiedNodes }}</strong></span>
+        <div class="summary-grid result-summary-grid stack-top-small">
           <span>Warnings <strong>{{ preview()?.warnings?.length }}</strong></span>
           <span>Blocking <strong>{{ preview()?.blockingErrors?.length }}</strong></span>
+          <span>Target node delta <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.modifiedNodes }}</strong></span>
+          <span>Source node delta <strong>{{ preview()?.semanticDiffResultVsSource?.summary?.modifiedNodes }}</strong></span>
+          <span>Target settings <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.changedWorkflowSettings }}</strong></span>
+          <span>Credential changes <strong>{{ preview()?.semanticDiffResultVsTarget?.summary?.changedCredentials }}</strong></span>
         </div>
       } @else {
         <p class="empty">Build preview to validate and inspect the generated workflow.</p>
@@ -232,6 +249,160 @@
   }
 
   @if (preview()) {
+    <section class="panel stack-top result-inspector">
+      <header>
+        <div>
+          <h2>Result View</h2>
+          <p class="empty">Inspect the exact workflow that will be committed to the target branch.</p>
+        </div>
+        <span class="status" [class.on]="preview()?.validationStatus === 'valid'">{{ preview()?.validationStatus }}</span>
+      </header>
+
+      <div class="view-tabs result-tabs" role="tablist" aria-label="Result comparison">
+        <button class="button" type="button" role="tab" [class.primary]="resultTab() === 'target'" [attr.aria-selected]="resultTab() === 'target'" (click)="resultTab.set('target')">Result vs Target</button>
+        <button class="button" type="button" role="tab" [class.primary]="resultTab() === 'source'" [attr.aria-selected]="resultTab() === 'source'" (click)="resultTab.set('source')">Result vs Source</button>
+        <button class="button" type="button" role="tab" [class.primary]="resultTab() === 'nodes'" [attr.aria-selected]="resultTab() === 'nodes'" (click)="resultTab.set('nodes')">Decision Map</button>
+      </div>
+
+      @if (resultTab() === 'target' || resultTab() === 'source') {
+        <section class="result-tab-panel">
+          <p class="result-diff-line">{{ resultDiffSummary(resultTab() === 'target' ? 'target' : 'source') }}</p>
+          <div class="split stack-top-small">
+            <section class="result-list">
+              <h3>Changed nodes</h3>
+              <div class="rows compact-list">
+                @for (node of resultDiffNodes(resultTab() === 'target' ? 'target' : 'source'); track node.nodeId + node.nodeName + node.nodeType) {
+                  <details class="row detail-row result-node-detail" [open]="node.changeType === 'modified' || nodeChangeCount(node) > 0">
+                    <summary class="result-node-row">
+                      <div>
+                        <strong>{{ node.nodeName }}</strong>
+                        <small>{{ node.nodeType }}</small>
+                      </div>
+                      <span class="status" [class.on]="node.changeType === 'added' || node.changeType === 'modified'">{{ node.changeType }}</span>
+                      <span>{{ nodeChangeCount(node) }} change(s)</span>
+                    </summary>
+
+                    @if (node.parameterChanges.length > 0) {
+                      <h4>Parameters</h4>
+                      <table class="result-detail-table">
+                        <thead><tr><th>Path</th><th>Before</th><th>Result</th><th>Importance</th></tr></thead>
+                        <tbody>
+                          @for (change of node.parameterChanges; track change.path) {
+                            <tr>
+                              <td><code>{{ change.path }}</code></td>
+                              <td class="old-value">{{ change.oldValuePreview ?? 'None' }}</td>
+                              <td class="new-value">{{ change.newValuePreview ?? 'None' }}</td>
+                              <td><span class="status" [class.on]="change.importance === 'high'">{{ change.importance }}</span></td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+
+                    @if (node.credentialChanges.length > 0) {
+                      <h4>Credentials</h4>
+                      <table class="result-detail-table">
+                        <thead><tr><th>Key</th><th>Type</th><th>Before</th><th>Result</th></tr></thead>
+                        <tbody>
+                          @for (credential of node.credentialChanges; track credential.credentialKey) {
+                            <tr>
+                              <td><code>{{ credential.credentialKey }}</code></td>
+                              <td>{{ credential.credentialType }}</td>
+                              <td class="old-value">{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }}</td>
+                              <td class="new-value">{{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+
+                    @if (node.metadataChanges.length > 0) {
+                      <h4>Node metadata</h4>
+                      <table class="result-detail-table">
+                        <thead><tr><th>Path</th><th>Before</th><th>Result</th><th>Importance</th></tr></thead>
+                        <tbody>
+                          @for (change of node.metadataChanges; track change.path) {
+                            <tr>
+                              <td><code>{{ change.path }}</code></td>
+                              <td class="old-value">{{ change.oldValuePreview ?? 'None' }}</td>
+                              <td class="new-value">{{ change.newValuePreview ?? 'None' }}</td>
+                              <td><span class="status low">{{ change.importance }}</span></td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    }
+                  </details>
+                } @empty {
+                  <p class="empty">No node differences in this comparison.</p>
+                }
+              </div>
+            </section>
+            <section class="result-list">
+              <h3>Workflow settings</h3>
+              <div class="rows compact-list">
+                @for (setting of resultDiffSettings(resultTab() === 'target' ? 'target' : 'source'); track setting.path) {
+                  <div class="row result-setting-row">
+                    <code>{{ setting.path }}</code>
+                    <span class="status" [class.on]="setting.importance === 'high'">{{ setting.importance }}</span>
+                    <small>{{ setting.oldValuePreview ?? 'None' }} to {{ setting.newValuePreview ?? 'None' }}</small>
+                  </div>
+                } @empty {
+                  <p class="empty">No workflow setting differences in this comparison.</p>
+                }
+              </div>
+            </section>
+          </div>
+
+          <div class="split stack-top-small">
+            <section class="result-list">
+              <h3>Credential changes</h3>
+              <div class="rows compact-list">
+                @for (credential of resultDiffCredentials(resultTab() === 'target' ? 'target' : 'source'); track credential.nodeName + credential.credentialKey + credential.credentialType) {
+                  <div class="row result-credential-row">
+                    <strong>{{ credential.nodeName }}</strong>
+                    <code>{{ credential.credentialKey }}</code>
+                    <small>{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }} to {{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</small>
+                  </div>
+                } @empty {
+                  <p class="empty">No credential differences in this comparison.</p>
+                }
+              </div>
+            </section>
+            <section class="result-list">
+              <h3>Connection changes</h3>
+              <div class="rows compact-list">
+                @for (connection of resultDiffConnections(resultTab() === 'target' ? 'target' : 'source'); track connection.sourceNodeName + connection.targetNodeName + connection.changeType + connection.outputIndex + connection.inputIndex) {
+                  <div class="row result-connection-row">
+                    <span class="status" [class.on]="connection.changeType === 'added' || connection.changeType === 'modified'">{{ connection.changeType }}</span>
+                    <strong>{{ connection.sourceNodeName }} to {{ connection.targetNodeName }}</strong>
+                    <small>Output {{ connection.outputIndex ?? 'any' }} / input {{ connection.inputIndex ?? 'any' }}</small>
+                  </div>
+                } @empty {
+                  <p class="empty">No connection differences in this comparison.</p>
+                }
+              </div>
+            </section>
+          </div>
+        </section>
+      } @else {
+        <section class="result-tab-panel">
+          <div class="rows">
+            @for (node of session()?.selection?.nodeSelections; track node.nodeMatchKey) {
+              <div class="row result-node-row">
+                <div>
+                  <strong>{{ node.nodeName }}</strong>
+                  <small>{{ node.nodeType }}</small>
+                </div>
+                <span class="status" [class.on]="node.changeType === 'added' || node.changeType === 'modified'">{{ node.changeType }}</span>
+                <span class="status" [class.warning]="node.resolution === 'exclude'">{{ node.resolution }}</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+    </section>
+
     <section class="panel stack-top">
       <header>
         <h2>Validation</h2>
@@ -269,6 +440,27 @@
       <button class="button primary stack-top-small" type="button" (click)="apply()" [disabled]="!canApply()">
         {{ applying() ? 'Applying...' : 'Apply Manual Merge' }}
       </button>
+    </section>
+  }
+
+  @if (applyResult()) {
+    <section class="panel stack-top apply-result-panel">
+      <header>
+        <h2>Applied Result</h2>
+        <span class="status" [class.on]="applyResult()?.commitCreated">{{ applyResult()?.commitCreated ? 'committed' : 'no changes' }}</span>
+      </header>
+      <div class="summary-grid result-summary-grid">
+        <span>Workflow <strong>{{ applyResult()?.workflowFilePath }}</strong></span>
+        <span>Commit <strong>{{ applyResult()?.commitSha ? applyResult()?.commitSha?.slice(0, 10) : 'none' }}</strong></span>
+        <span>Warnings <strong>{{ applyResult()?.warnings?.length }}</strong></span>
+      </div>
+      <p class="empty stack-top-small">{{ applyResult()?.message }}</p>
+      <div class="actions wrap-actions stack-top-small">
+        <a class="button" routerLink="/promotion">Back to Promotion</a>
+        @if (applyResult()?.commitSha) {
+          <a class="button primary" [routerLink]="['/diff', applyResult()?.commitSha]" [queryParams]="{ environment: session()?.targetEnvironmentKey }">View commit diff</a>
+        }
+      </div>
     </section>
   }
 }

@@ -91,6 +91,13 @@
       {{ exporting() ? 'Exporting...' : 'Export workflows now' }}
     </button>
   </header>
+  <div class="import-pipeline-strip">
+    <span>Docker export</span>
+    <strong>Normalize workflow JSON</strong>
+    <strong>Scan credential references</strong>
+    <strong>Commit Git snapshot</strong>
+    <strong>Enable merge and promotion</strong>
+  </div>
 </section>
 
 @if (testResult()) {

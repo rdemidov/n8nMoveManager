@@ -29,6 +29,7 @@ export class ManualMergeComponent implements OnInit {
   readonly previewing = signal(false);
   readonly applying = signal(false);
   readonly showJson = signal(false);
+  readonly resultTab = signal<'target' | 'source' | 'nodes'>('target');
   readonly openedNodeKey = signal<string | null>(null);
   readonly aiAnswer = signal<AiAssistantResponse | null>(null);
   readonly aiLoading = signal(false);
@@ -37,6 +38,19 @@ export class ManualMergeComponent implements OnInit {
 
   readonly blockingErrors = computed(() => this.preview()?.blockingErrors ?? []);
   readonly canApply = computed(() => Boolean(this.preview() && this.blockingErrors().length === 0 && this.confirmApply() && !this.applying()));
+  readonly nodeResolutionSummary = computed(() => {
+    const nodes = this.session()?.selection.nodeSelections ?? [];
+    return {
+      source: nodes.filter((node) => node.resolution === 'use-source').length,
+      target: nodes.filter((node) => node.resolution === 'use-target').length,
+      parameterLevel: nodes.filter((node) => node.resolution === 'parameter-level').length,
+      excluded: nodes.filter((node) => node.resolution === 'exclude').length,
+    };
+  });
+  readonly mappedCredentialCount = computed(() =>
+    this.session()?.sourceWorkflow.credentialReferences.filter((credential) => credential.isMapped).length ?? 0);
+  readonly missingCredentialCount = computed(() =>
+    this.session()?.sourceWorkflow.credentialReferences.filter((credential) => !credential.isMapped).length ?? 0);
 
   constructor(
     readonly api: ApiService,
@@ -170,6 +184,49 @@ export class ManualMergeComponent implements OnInit {
         this.applying.set(false);
       },
     });
+  }
+
+  resultDiffSummary(side: 'target' | 'source'): string {
+    const diff = side === 'target'
+      ? this.preview()?.semanticDiffResultVsTarget
+      : this.preview()?.semanticDiffResultVsSource;
+    if (!diff) {
+      return 'Build preview to inspect the generated result.';
+    }
+
+    return `+${diff.summary.addedNodes} nodes, -${diff.summary.removedNodes} nodes, ${diff.summary.modifiedNodes} modified, ${diff.summary.changedConnections} connection changes, ${diff.summary.changedCredentials} credential changes.`;
+  }
+
+  resultDiffNodes(side: 'target' | 'source') {
+    const diff = side === 'target'
+      ? this.preview()?.semanticDiffResultVsTarget
+      : this.preview()?.semanticDiffResultVsSource;
+    return diff?.nodeChanges ?? [];
+  }
+
+  resultDiffSettings(side: 'target' | 'source') {
+    const diff = side === 'target'
+      ? this.preview()?.semanticDiffResultVsTarget
+      : this.preview()?.semanticDiffResultVsSource;
+    return diff?.workflowSettingsChanges ?? [];
+  }
+
+  resultDiffCredentials(side: 'target' | 'source') {
+    const diff = side === 'target'
+      ? this.preview()?.semanticDiffResultVsTarget
+      : this.preview()?.semanticDiffResultVsSource;
+    return diff?.credentialChanges ?? [];
+  }
+
+  resultDiffConnections(side: 'target' | 'source') {
+    const diff = side === 'target'
+      ? this.preview()?.semanticDiffResultVsTarget
+      : this.preview()?.semanticDiffResultVsSource;
+    return diff?.connectionChanges ?? [];
+  }
+
+  nodeChangeCount(node: { parameterChanges: unknown[]; credentialChanges: unknown[]; metadataChanges: unknown[] }): number {
+    return node.parameterChanges.length + node.credentialChanges.length + node.metadataChanges.length;
   }
 
   explainNode(node: NodeMergeSelection): void {

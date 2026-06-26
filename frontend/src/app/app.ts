@@ -63,24 +63,25 @@ export class App implements OnInit {
   selectEnvironment(event: Event): void {
     const select = event.target as HTMLSelectElement;
     this.api.selectEnvironment(select.value);
-    this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { environment: select.value },
-      queryParamsHandling: 'merge',
-    });
+    this.navigateWithEnvironment(select.value, false);
   }
 
   private ensureEnvironmentInUrl(): void {
+    if (window.location.pathname && window.location.pathname !== '/') {
+      return;
+    }
+
     const queryEnvironment = this.route.snapshot.queryParamMap.get('environment');
     if (queryEnvironment === this.api.selectedEnvironmentKey()) {
       return;
     }
 
-    this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { environment: this.api.selectedEnvironmentKey() },
-      queryParamsHandling: 'merge',
-      replaceUrl: true,
-    });
+    this.navigateWithEnvironment(this.api.selectedEnvironmentKey(), true);
+  }
+
+  private navigateWithEnvironment(environmentKey: string, replaceUrl: boolean): void {
+    const tree = this.router.parseUrl(this.router.url);
+    tree.queryParams = { ...tree.queryParams, environment: environmentKey };
+    this.router.navigateByUrl(tree, { replaceUrl });
   }
 }

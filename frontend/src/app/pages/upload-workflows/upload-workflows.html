@@ -6,6 +6,14 @@
 </section>
 
 <section class="panel upload-commit-panel">
+  <div class="import-pipeline-strip">
+    <span>Manual upload</span>
+    <strong>Normalize workflow JSON</strong>
+    <strong>Scan credential references</strong>
+    <strong>Commit Git snapshot</strong>
+    <strong>Enable merge and promotion</strong>
+  </div>
+
   <div class="upload-panel">
     <label class="file-drop">
       <input type="file" accept=".json,application/json" multiple (change)="onFilesSelected($event)" />

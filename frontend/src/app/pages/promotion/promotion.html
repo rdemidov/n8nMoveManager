@@ -379,6 +379,43 @@
           <strong>{{ preview()?.workflowsToDelete?.length }}</strong>
         </article>
       </div>
+      <section class="merge-preview-board stack-top-small" aria-label="Merge preview result">
+        <header>
+          <div>
+            <h3>Dry-run result</h3>
+            <p class="empty">{{ preview()?.affectedWorkflowCount }} workflow(s) will change target state. Credential mappings found {{ preview()?.credentialMappingSummary?.found }} / {{ preview()?.credentialMappingSummary?.required }}.</p>
+          </div>
+          <span class="status" [class.on]="(preview()?.blockingErrors?.length ?? 0) === 0">{{ (preview()?.blockingErrors?.length ?? 0) === 0 ? 'ready' : 'blocked' }}</span>
+        </header>
+        <div class="summary-grid diff-summary-grid">
+          <span>Added nodes <strong>{{ previewSemanticTotals().addedNodes }}</strong></span>
+          <span>Removed nodes <strong>{{ previewSemanticTotals().removedNodes }}</strong></span>
+          <span>Modified nodes <strong>{{ previewSemanticTotals().modifiedNodes }}</strong></span>
+          <span>Credentials <strong>{{ previewSemanticTotals().changedCredentials }}</strong></span>
+          <span>Connections <strong>{{ previewSemanticTotals().changedConnections }}</strong></span>
+          <span>Settings <strong>{{ previewSemanticTotals().changedWorkflowSettings }}</strong></span>
+        </div>
+        <div class="merge-action-grid stack-top-small">
+          @for (group of previewActionGroups(); track group.status) {
+            <section class="merge-action-column" [class.delete-action]="group.status === 'delete'" [class.write-action]="group.status === 'write'">
+              <header>
+                <h4>{{ group.label }}</h4>
+                <span class="status" [class.on]="group.status === 'write'" [class.warning]="group.status === 'delete'">{{ group.paths.length }}</span>
+              </header>
+              <div class="rows compact-list">
+                @for (path of group.paths; track path) {
+                  <div class="row merge-action-row">
+                    <strong>{{ workflowLabelForPath(path) }}</strong>
+                    <code>{{ path }}</code>
+                  </div>
+                } @empty {
+                  <p class="empty">No workflows.</p>
+                }
+              </div>
+            </section>
+          }
+        </div>
+      </section>
       @if ((preview()?.blockingErrors?.length ?? 0) > 0) {
         <div class="rows stack-top-small">
           @for (blockingError of preview()?.blockingErrors; track blockingError) {
