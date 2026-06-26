@@ -73,6 +73,36 @@
       <div><h2>Reconciliation preview</h2><p class="empty">Select remote additions and changes to import. Local-only workflows are left untouched.</p></div>
       <button class="button primary" type="button" (click)="syncSelected()" [disabled]="syncing() || selectedRemoteIds().length === 0">{{ syncing() ? 'Syncing…' : 'Sync selected' }}</button>
     </header>
+    <div class="summary-grid stack-top-small">
+      <span>Remote workflows <strong>{{ reconciliation()?.remoteWorkflowCount }}</strong></span>
+      <span>Will add <strong>{{ previewAddedCount() }}</strong></span>
+      <span>Will update <strong>{{ previewModifiedCount() }}</strong></span>
+      <span>Local only <strong>{{ reconciliation()?.localOnlyCount }}</strong></span>
+    </div>
+    @if (previewChanges().length > 0) {
+      <div class="rows stack-top-small">
+        @for (workflow of previewChanges(); track previewWorkflowPath(workflow)) {
+          <details class="row detail-row" [open]="workflow.changeType === 'modified'">
+            <summary>
+              <strong>{{ workflow.workflowName }}</strong>
+              <span class="status" [class.on]="workflow.changeType === 'added' || workflow.changeType === 'modified'">{{ workflow.changeType }}</span>
+              <small>{{ previewNodeChangeCount(workflow) }} node change(s)</small>
+              <code>{{ previewWorkflowPath(workflow) }}</code>
+            </summary>
+            <div class="summary-grid stack-top-small">
+              <span>Added nodes <strong>{{ workflow.summary.addedNodes }}</strong></span>
+              <span>Removed nodes <strong>{{ workflow.summary.removedNodes }}</strong></span>
+              <span>Modified nodes <strong>{{ workflow.summary.modifiedNodes }}</strong></span>
+              <span>Credentials <strong>{{ workflow.summary.changedCredentials }}</strong></span>
+              <span>Connections <strong>{{ workflow.summary.changedConnections }}</strong></span>
+              <span>Settings <strong>{{ workflow.summary.changedWorkflowSettings }}</strong></span>
+            </div>
+          </details>
+        }
+      </div>
+    } @else {
+      <p class="empty stack-top-small">The full workflow definitions match the current Git snapshot.</p>
+    }
     <table>
       <thead><tr><th>Sync</th><th>Workflow</th><th>Status</th><th>Git file</th></tr></thead>
       <tbody>

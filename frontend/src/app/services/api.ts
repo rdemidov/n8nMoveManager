@@ -144,6 +144,7 @@ export interface WorkflowApiReconciliationPreview {
   items: WorkflowApiReconciliationItem[];
   remoteWorkflowCount: number;
   localOnlyCount: number;
+  changePreview: WorkflowSemanticDiffCollection;
 }
 
 export interface DataTableComparison {
@@ -408,6 +409,8 @@ export interface ParameterSemanticDiff {
   newValuePreview: string | null;
   valueType: string;
   importance: string;
+  oldValueFull?: string | null;
+  newValueFull?: string | null;
 }
 
 export interface CredentialSemanticDiff {

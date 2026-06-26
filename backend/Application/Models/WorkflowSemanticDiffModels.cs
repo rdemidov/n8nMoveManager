@@ -42,7 +42,9 @@ public sealed record ParameterSemanticDiffDto(
     string? OldValuePreview,
     string? NewValuePreview,
     string ValueType,
-    string Importance);
+    string Importance,
+    string? OldValueFull = null,
+    string? NewValueFull = null);
 
 public sealed record CredentialSemanticDiffDto(
     string NodeName,

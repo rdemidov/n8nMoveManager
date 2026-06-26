@@ -128,7 +128,9 @@ public sealed class WorkflowSemanticDiffService
                 changeType == "removed" ? Preview(workflow.GetProperty(field)) : null,
                 changeType == "added" ? Preview(workflow.GetProperty(field)) : null,
                 ValueType(workflow.GetProperty(field)),
-                "normal"))
+                "normal",
+                changeType == "removed" ? FullValue(workflow.GetProperty(field)) : null,
+                changeType == "added" ? FullValue(workflow.GetProperty(field)) : null))
             .ToArray();
         var summary = new WorkflowSemanticDiffSummaryDto(
             changeType == "added" ? nodes.Length : 0,
@@ -369,7 +371,9 @@ public sealed class WorkflowSemanticDiffService
                 oldExists ? Preview(oldElement) : null,
                 newExists ? Preview(newElement) : null,
                 newExists ? ValueType(newElement) : oldExists ? ValueType(oldElement) : "missing",
-                importance)
+                importance,
+                oldExists ? FullValue(oldElement) : null,
+                newExists ? FullValue(newElement) : null)
         ];
     }
 
@@ -604,6 +608,15 @@ public sealed class WorkflowSemanticDiffService
 
         preview = preview.ReplaceLineEndings(" ");
         return preview.Length <= 140 ? preview : $"{preview[..137]}...";
+    }
+
+    private static string FullValue(JsonElement element)
+    {
+        var value = element.ValueKind == JsonValueKind.String
+            ? element.GetString() ?? string.Empty
+            : element.GetRawText();
+
+        return value.ReplaceLineEndings(" ");
     }
 
     private sealed record CredentialInfo(string NodeName, string Key, string Type, string? Id, string? Name);

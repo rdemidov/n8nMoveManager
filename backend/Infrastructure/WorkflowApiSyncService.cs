@@ -13,6 +13,8 @@ public sealed class WorkflowApiSyncService(
     IGitRepositoryService git,
     IEnvironmentN8nApiConfigStore configStore,
     IWorkflowImportService importService,
+    WorkflowNormalizer normalizer,
+    WorkflowSemanticDiffService semanticDiffService,
     IHttpClientFactory httpClientFactory) : IWorkflowApiSyncService
 {
     public async Task<WorkflowApiSyncResult> SyncAsync(string environmentKey, CancellationToken cancellationToken)
@@ -22,17 +24,56 @@ public sealed class WorkflowApiSyncService(
     {
         var context = await environments.GetByKeyAsync(environmentKey, cancellationToken);
         var summaries = await GetSummariesAsync(context.Environment.Key, cancellationToken);
-        var local = ReadLocalWorkflows(context.Workspace.RepoPath, context.Environment.GitBranch);
+        var currentFiles = git.ReadWorkflowFilesFromBranch(context.Workspace.RepoPath, context.Environment.GitBranch);
+        var local = ReadLocalWorkflows(currentFiles);
         var remoteIds = summaries.Select(item => item["id"]?.GetValue<string>()).Where(id => !string.IsNullOrWhiteSpace(id)).Cast<string>().ToHashSet(StringComparer.Ordinal);
+        var remoteDetails = await GetWorkflowDetailsAsync(context.Environment.Key, remoteIds, cancellationToken);
+        var remoteFiles = BuildNormalizedWorkflowFiles(remoteDetails);
+        var remoteFilesById = remoteFiles.Values.ToDictionary(file => file.WorkflowId, StringComparer.Ordinal);
+        var previewOldFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var previewNewFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in remoteFiles)
+        {
+            if (!currentFiles.TryGetValue(file.Key, out var oldContent)
+                && local.TryGetValue(file.Value.WorkflowId, out var existing))
+            {
+                oldContent = existing.Content;
+            }
+
+            previewOldFiles[file.Key] = oldContent ?? string.Empty;
+            previewNewFiles[file.Key] = file.Value.Content;
+        }
+
+        var exactStatuses = remoteFiles.ToDictionary(
+            file => file.Value.WorkflowId,
+            file => currentFiles.TryGetValue(file.Key, out var oldContent)
+                ? string.Equals(oldContent, file.Value.Content, StringComparison.Ordinal) ? "in-sync" : "changed-remote"
+                : local.ContainsKey(file.Value.WorkflowId) ? "changed-remote"
+                : "new-remote",
+            StringComparer.Ordinal);
+        var changePreview = semanticDiffService.CompareWorkflowFiles(
+            previewOldFiles,
+            previewNewFiles,
+            context.Environment.Key,
+            "n8n API");
+
         var items = summaries.Select(item =>
         {
             var id = item["id"]?.GetValue<string>(); var name = item["name"]?.GetValue<string>() ?? id ?? "Unnamed workflow";
-            (string Path, string Name, string Content)? existing = id is not null && local.TryGetValue(id, out var value) ? value : null;
-            var status = existing is null ? "new-remote" : RemoteLooksChanged(item, existing.Value.Content) ? "changed-remote" : "in-sync";
-            return new WorkflowApiReconciliationItem(id, name, existing?.Path, status, status != "in-sync");
+            var filePath = id is not null && remoteFilesById.TryGetValue(id, out var remoteFile)
+                ? remoteFile.FilePath
+                : id is not null && local.TryGetValue(id, out var value)
+                    ? value.Path
+                    : null;
+            var status = id is not null && exactStatuses.TryGetValue(id, out var exactStatus)
+                ? exactStatus
+                : id is not null && local.TryGetValue(id, out var existing) && RemoteLooksChanged(item, existing.Content)
+                    ? "changed-remote"
+                    : local.ContainsKey(id ?? string.Empty) ? "in-sync" : "new-remote";
+            return new WorkflowApiReconciliationItem(id, name, filePath, status, status != "in-sync");
         }).ToList();
         items.AddRange(local.Where(pair => !remoteIds.Contains(pair.Key)).Select(pair => new WorkflowApiReconciliationItem(pair.Key, pair.Value.Name, pair.Value.Path, "local-only", false)));
-        return new WorkflowApiReconciliationPreview(context.Environment.Key, items.OrderBy(item => item.Name).ToArray(), summaries.Count, items.Count(item => item.Status == "local-only"));
+        return new WorkflowApiReconciliationPreview(context.Environment.Key, items.OrderBy(item => item.Name).ToArray(), summaries.Count, items.Count(item => item.Status == "local-only"), changePreview);
     }
 
     public async Task<WorkflowApiSyncResult> SyncSelectedAsync(string environmentKey, IReadOnlyCollection<string> workflowIds, CancellationToken cancellationToken)
@@ -88,10 +129,59 @@ public sealed class WorkflowApiSyncService(
         return summaries;
     }
 
-    private Dictionary<string, (string Path, string Name, string Content)> ReadLocalWorkflows(string repoPath, string branch)
+    private async Task<IReadOnlyList<string>> GetWorkflowDetailsAsync(string environmentKey, IReadOnlyCollection<string> workflowIds, CancellationToken cancellationToken)
+    {
+        if (workflowIds.Count == 0)
+        {
+            return [];
+        }
+
+        var config = await configStore.GetAsync(environmentKey, cancellationToken);
+        var apiKey = await configStore.GetApiKeyAsync(environmentKey, cancellationToken) ?? throw new WorkflowImportException("An n8n API key is required to preview workflow changes.");
+        var client = httpClientFactory.CreateClient("n8n");
+        var details = new List<string>();
+        foreach (var id in workflowIds)
+        {
+            var uri = BuildUri(config.BaseUrl, $"{config.WorkflowApiPath.TrimEnd('/')}/{Uri.EscapeDataString(id)}", null);
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.Add("X-N8N-API-KEY", apiKey);
+            using var response = await client.SendAsync(request, cancellationToken);
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw ApiFailure($"fetching workflow '{id}' for preview", response.StatusCode, content);
+            }
+
+            details.Add(content);
+        }
+
+        return details;
+    }
+
+    private Dictionary<string, (string WorkflowId, string FilePath, string Content)> BuildNormalizedWorkflowFiles(IEnumerable<string> workflowContents)
+    {
+        var files = new Dictionary<string, (string WorkflowId, string FilePath, string Content)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var content in workflowContents)
+        {
+            using var document = JsonDocument.Parse(content);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new WorkflowImportException("n8n returned a workflow preview payload that was not a JSON object.");
+            }
+
+            var id = ReadString(document.RootElement, "id") ?? throw new WorkflowImportException("n8n returned a workflow without an id.");
+            var name = ReadString(document.RootElement, "name") ?? id;
+            var filePath = $"workflows/{MakeSafeFileName(name)}.json";
+            files[filePath] = (id, filePath, normalizer.Normalize(document.RootElement));
+        }
+
+        return files;
+    }
+
+    private Dictionary<string, (string Path, string Name, string Content)> ReadLocalWorkflows(IReadOnlyDictionary<string, string> files)
     {
         var result = new Dictionary<string, (string Path, string Name, string Content)>(StringComparer.Ordinal);
-        foreach (var (path, content) in git.ReadWorkflowFilesFromBranch(repoPath, branch))
+        foreach (var (path, content) in files)
         {
             try
             {
@@ -104,6 +194,26 @@ public sealed class WorkflowApiSyncService(
         return result;
     }
     private static bool RemoteLooksChanged(JsonObject remote, string content) => remote["updatedAt"]?.GetValue<string>() is { } updated && !content.Contains(updated, StringComparison.Ordinal);
+
+    private static string? ReadString(JsonElement element, string propertyName) =>
+        element.ValueKind == JsonValueKind.Object
+        && element.TryGetProperty(propertyName, out var value)
+        && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string MakeSafeFileName(string? value)
+    {
+        var source = string.IsNullOrWhiteSpace(value) ? Guid.NewGuid().ToString("N") : value.Trim();
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var chars = source
+            .Select(c => invalid.Contains(c) ? '-' : c)
+            .Select(c => char.IsWhiteSpace(c) ? '-' : c)
+            .ToArray();
+
+        var safe = new string(chars).Trim('-', '.');
+        return string.IsNullOrWhiteSpace(safe) ? Guid.NewGuid().ToString("N") : safe;
+    }
 
     private static Uri BuildUri(string baseUrl, string path, string? cursor)
     {

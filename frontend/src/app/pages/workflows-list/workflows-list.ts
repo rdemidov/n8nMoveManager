@@ -2,7 +2,7 @@ import { DatePipe } from '@angular/common';
 import { Component, computed, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ApiService, N8nApiConfig, WorkflowApiReconciliationPreview, WorkflowApiSyncResult, WorkflowDeploymentPreview, WorkflowDeploymentResult, WorkflowListItem } from '../../services/api';
+import { ApiService, N8nApiConfig, WorkflowApiReconciliationPreview, WorkflowApiSyncResult, WorkflowDeploymentPreview, WorkflowDeploymentResult, WorkflowListItem, WorkflowSemanticDiff } from '../../services/api';
 import { ConfirmationService } from '../../services/confirmation';
 import { ToastService } from '../../services/toast';
 import { UiAlertComponent } from '../../components/ui-alert/ui-alert';
@@ -34,6 +34,7 @@ export class WorkflowsListComponent {
   totalCount = signal(0);
   page = signal(1);
   search = '';
+  previewChanges = computed(() => (this.reconciliation()?.changePreview.workflows ?? []).filter((workflow) => workflow.changeType !== 'unchanged'));
 
   constructor(readonly api: ApiService, private readonly confirmation: ConfirmationService, private readonly toast: ToastService) {
     effect(() => {
@@ -100,6 +101,22 @@ export class WorkflowsListComponent {
       next: (result) => { this.syncResult.set(result); this.reconciliation.set(null); this.syncing.set(false); this.toast.success(`Selected sync finished: ${result.importedWorkflowsCount} workflow(s) imported.`); this.load(this.api.selectedEnvironmentKey()); },
       error: (response) => { const message = response?.error?.error ?? 'Could not sync the selected workflows.'; this.error.set(message); this.toast.error(message, { actionLabel: 'Retry', action: () => this.syncSelected() }); this.syncing.set(false); },
     });
+  }
+
+  previewAddedCount(): number {
+    return this.previewChanges().filter((workflow) => workflow.changeType === 'added').length;
+  }
+
+  previewModifiedCount(): number {
+    return this.previewChanges().filter((workflow) => workflow.changeType === 'modified').length;
+  }
+
+  previewNodeChangeCount(workflow: WorkflowSemanticDiff): number {
+    return workflow.summary.addedNodes + workflow.summary.removedNodes + workflow.summary.modifiedNodes;
+  }
+
+  previewWorkflowPath(workflow: WorkflowSemanticDiff): string {
+    return workflow.newFilePath ?? workflow.oldFilePath ?? 'No file path';
   }
 
   toggleWorkflow(filePath: string, event: Event): void {

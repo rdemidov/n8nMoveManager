@@ -36,6 +36,10 @@ export class GitHistoryComponent {
     return environment.key === this.api.selectedEnvironmentKey();
   }
 
+  hasPreviousCommit(index: number): boolean {
+    return index < this.commits().length - 1;
+  }
+
   private load(environmentKey: string): void {
     this.loading.set(true);
     this.error.set(null);

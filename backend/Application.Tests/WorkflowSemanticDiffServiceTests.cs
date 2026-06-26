@@ -45,6 +45,26 @@ public sealed class WorkflowSemanticDiffServiceTests
     }
 
     [Fact]
+    public void CompareWorkflowContent_KeepsFullParameterValuesForHints()
+    {
+        var oldMessage = new string('a', 220);
+        var newMessage = new string('b', 220);
+        var oldWorkflow = Workflow($$"""[{ "id": "1", "name": "Agent", "type": "n8n-nodes-langchain.agent", "parameters": { "systemMessage": "{{oldMessage}}" } }]""");
+        var newWorkflow = Workflow($$"""[{ "id": "1", "name": "Agent", "type": "n8n-nodes-langchain.agent", "parameters": { "systemMessage": "{{newMessage}}" } }]""");
+
+        var diff = _service.CompareWorkflowContent(oldWorkflow, newWorkflow);
+        var node = Assert.Single(diff.NodeChanges, node => node.ChangeType == "modified");
+        var change = Assert.Single(node.ParameterChanges);
+
+        Assert.Equal("systemMessage", change.Path);
+        Assert.EndsWith("...", change.OldValuePreview);
+        Assert.EndsWith("...", change.NewValuePreview);
+        Assert.Equal(oldMessage, change.OldValueFull);
+        Assert.Equal(newMessage, change.NewValueFull);
+    }
+
+
+    [Fact]
     public void CompareWorkflowContent_DetectsCredentialReferenceChanges()
     {
         var oldWorkflow = Workflow("""[{ "id": "1", "name": "HTTP", "type": "n8n-nodes-base.httpRequest", "credentials": { "httpBasicAuth": { "id": "old-id", "name": "Old", "type": "httpBasicAuth" } }, "parameters": {} }]""");

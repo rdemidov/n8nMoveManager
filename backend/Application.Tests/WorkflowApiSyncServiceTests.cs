@@ -26,6 +26,8 @@ public sealed class WorkflowApiSyncServiceTests
             new FakeGitRepositoryService(),
             new FakeN8nApiConfigStore(),
             importer,
+            new WorkflowNormalizer(),
+            new WorkflowSemanticDiffService(),
             http);
 
         var result = await service.SyncSelectedAsync("local", ["wf-1"], CancellationToken.None);
@@ -37,6 +39,47 @@ public sealed class WorkflowApiSyncServiceTests
         Assert.Equal("n8n-api-wf-1.json", importer.Sources[0].FileName);
         Assert.Contains("\"nodes\"", importer.Sources[0].Content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Sync workflows from n8n API", importer.CommitMessage);
+    }
+
+    [Fact]
+    public async Task Preview_ReturnsSemanticChangePreviewWithoutImporting()
+    {
+        var importer = new FakeWorkflowImportService();
+        var git = new FakeGitRepositoryService
+        {
+            BranchFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["workflows/Remote-Workflow.json"] = """
+                {
+                  "active": false,
+                  "connections": {},
+                  "id": "wf-1",
+                  "name": "Remote Workflow",
+                  "nodes": []
+                }
+                """
+            }
+        };
+        var http = new FakeHttpClientFactory(new Queue<(HttpStatusCode Status, string Content)>([
+            (HttpStatusCode.OK, """{"data":[{"id":"wf-1","name":"Remote Workflow"}],"nextCursor":null}"""),
+            (HttpStatusCode.OK, """{"id":"wf-1","name":"Remote Workflow","active":true,"nodes":[{"id":"node-1","name":"Webhook","type":"n8n-nodes-base.webhook"}],"connections":{}}""")
+        ]));
+        var service = new WorkflowApiSyncService(
+            new FakeEnvironmentService(),
+            git,
+            new FakeN8nApiConfigStore(),
+            importer,
+            new WorkflowNormalizer(),
+            new WorkflowSemanticDiffService(),
+            http);
+
+        var preview = await service.PreviewAsync("local", CancellationToken.None);
+
+        Assert.Single(preview.Items);
+        Assert.Equal("changed-remote", preview.Items[0].Status);
+        Assert.Single(preview.ChangePreview.Workflows);
+        Assert.Equal("modified", preview.ChangePreview.Workflows[0].ChangeType);
+        Assert.Empty(importer.Sources);
     }
 
     private sealed class FakeEnvironmentService : IEnvironmentService
@@ -127,6 +170,8 @@ public sealed class WorkflowApiSyncServiceTests
 
     private sealed class FakeGitRepositoryService : IGitRepositoryService
     {
+        public IReadOnlyDictionary<string, string> BranchFiles { get; set; } = new Dictionary<string, string>();
+
         public void EnsureRepository(string repoPath) { }
         public void EnsureBranch(string repoPath, string branchName) { }
         public Task<GitCommitResult> CommitChangesAsync(string repoPath, string environmentKey, IReadOnlyCollection<string> relativePaths, string? commitMessage, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -136,7 +181,7 @@ public sealed class WorkflowApiSyncServiceTests
         public IReadOnlyList<GitDiffFileDto> GetCommitDiff(string repoPath, string commitSha) => [];
         public IReadOnlyList<GitDiffFileDto> GetLatestDiff(string repoPath, string branchName) => [];
         public IReadOnlyList<GitDiffFileDto> CompareBranches(string repoPath, string sourceBranchName, string targetBranchName) => [];
-        public IReadOnlyDictionary<string, string> ReadWorkflowFilesFromBranch(string repoPath, string branchName) => new Dictionary<string, string>();
+        public IReadOnlyDictionary<string, string> ReadWorkflowFilesFromBranch(string repoPath, string branchName) => BranchFiles;
         public IReadOnlyDictionary<string, string> ReadWorkflowFilesFromCommit(string repoPath, string commitSha, bool parent) => new Dictionary<string, string>();
         public string? ReadWorkflowFileFromCommit(string repoPath, string commitSha, string filePath) => null;
         public IReadOnlyDictionary<string, string> ReadWorkflowFilesFromMergeBase(string repoPath, string sourceBranchName, string targetBranchName) => new Dictionary<string, string>();

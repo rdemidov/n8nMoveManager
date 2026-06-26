@@ -37,7 +37,12 @@ public sealed record WorkflowApiSyncResult(
     int CredentialReferencesScanned,
     IReadOnlyList<string> Warnings);
 public sealed record WorkflowApiReconciliationItem(string? WorkflowId, string Name, string? FilePath, string Status, bool CanSync);
-public sealed record WorkflowApiReconciliationPreview(string EnvironmentKey, IReadOnlyList<WorkflowApiReconciliationItem> Items, int RemoteWorkflowCount, int LocalOnlyCount);
+public sealed record WorkflowApiReconciliationPreview(
+    string EnvironmentKey,
+    IReadOnlyList<WorkflowApiReconciliationItem> Items,
+    int RemoteWorkflowCount,
+    int LocalOnlyCount,
+    WorkflowSemanticDiffCollectionDto ChangePreview);
 public sealed record WorkflowApiSyncSelectionRequest(IReadOnlyList<string> WorkflowIds);
 public sealed record WorkflowHealthItem(string ExecutionId, string? WorkflowId, string? WorkflowName, string Status, DateTimeOffset? StartedAt, DateTimeOffset? StoppedAt);
 public sealed record WorkflowHealthResult(string EnvironmentKey, IReadOnlyList<WorkflowHealthItem> RecentFailures);

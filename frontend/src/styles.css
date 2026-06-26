@@ -1090,6 +1090,88 @@ code {
   margin-bottom: 16px;
 }
 
+.semantic-workflow table {
+  table-layout: fixed;
+}
+
+.semantic-workflow th,
+.semantic-workflow td {
+  white-space: normal;
+}
+
+.semantic-workflow td {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.semantic-workflow code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.semantic-workflow .diff-preview-cell {
+  overflow: visible;
+  position: relative;
+  vertical-align: top;
+}
+
+.semantic-workflow .diff-preview-hint {
+  cursor: help;
+  display: block;
+  outline: 0;
+  position: relative;
+}
+
+.semantic-workflow .diff-preview {
+  display: -webkit-box;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: 1.45;
+  max-height: 5.8em;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.semantic-workflow .diff-popover {
+  background: var(--surface);
+  border: 1px solid #8d99a8;
+  border-radius: 8px;
+  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.22);
+  color: var(--text);
+  display: none;
+  font-size: 13px;
+  font-weight: 500;
+  left: 0;
+  line-height: 1.45;
+  max-height: min(340px, 54vh);
+  min-width: min(360px, 72vw);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 12px 14px;
+  position: absolute;
+  text-transform: none;
+  top: calc(100% + 8px);
+  white-space: pre-wrap;
+  width: min(760px, 70vw);
+  z-index: 30;
+}
+
+.semantic-workflow .diff-preview-hint:hover .diff-popover,
+.semantic-workflow .diff-preview-hint:focus .diff-popover,
+.semantic-workflow .diff-preview-hint:focus-within .diff-popover,
+.semantic-workflow .diff-preview-hint:focus-visible .diff-popover {
+  display: block;
+}
+
+.semantic-workflow td:nth-child(3) .diff-popover {
+  left: auto;
+  right: 0;
+}
+
 .summary-grid {
   display: grid;
   gap: 10px;

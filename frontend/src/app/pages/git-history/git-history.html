@@ -33,7 +33,7 @@
 
 <section class="panel">
   <div class="rows">
-    @for (commit of commits(); track commit.sha) {
+    @for (commit of commits(); track commit.sha; let index = $index) {
       <div class="row commit-row">
         <div>
           <strong>{{ commit.shortSha }}</strong>
@@ -45,7 +45,11 @@
           <span>{{ commit.when | date: 'medium' }}</span>
           <a class="button" [routerLink]="['/commits', commit.sha, 'files']" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Files</a>
           <a class="button" [routerLink]="['/restore/preview', commit.sha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Restore preview</a>
-          <a class="button" [routerLink]="['/diff', commit.sha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Diff</a>
+          @if (hasPreviousCommit(index)) {
+            <a class="button" [routerLink]="['/diff', commit.sha]" [queryParams]="{ environment: api.selectedEnvironmentKey() }">Compare with previous</a>
+          } @else {
+            <button class="button" type="button" disabled>Compare with previous</button>
+          }
         </div>
       </div>
     } @empty {

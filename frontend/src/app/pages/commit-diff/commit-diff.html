@@ -164,8 +164,8 @@
                   @for (change of node.parameterChanges; track change.path) {
                     <tr>
                       <td><code>{{ change.path }}</code></td>
-                      <td>{{ change.oldValuePreview ?? 'None' }}</td>
-                      <td>{{ change.newValuePreview ?? 'None' }}</td>
+                      <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ change.oldValuePreview ?? 'None' }}</span><span class="diff-popover">{{ change.oldValueFull ?? change.oldValuePreview ?? 'None' }}</span></span></td>
+                      <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ change.newValuePreview ?? 'None' }}</span><span class="diff-popover">{{ change.newValueFull ?? change.newValuePreview ?? 'None' }}</span></span></td>
                       <td><span class="status" [class.low]="change.importance === 'low'">{{ change.importance }}</span></td>
                     </tr>
                   }
@@ -184,8 +184,8 @@
                     <tr>
                       <td><code>{{ credential.credentialKey }}</code></td>
                       <td>{{ credential.credentialType }}</td>
-                      <td>{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }}</td>
-                      <td>{{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</td>
+                      <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }}</span><span class="diff-popover">{{ credential.oldCredentialName ?? credential.oldCredentialId ?? 'None' }}</span></span></td>
+                      <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</span><span class="diff-popover">{{ credential.newCredentialName ?? credential.newCredentialId ?? 'None' }}</span></span></td>
                     </tr>
                   }
                 </tbody>
@@ -202,8 +202,8 @@
                   @for (change of node.metadataChanges; track change.path) {
                     <tr>
                       <td><code>{{ change.path }}</code></td>
-                      <td>{{ change.oldValuePreview ?? 'None' }}</td>
-                      <td>{{ change.newValuePreview ?? 'None' }}</td>
+                      <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ change.oldValuePreview ?? 'None' }}</span><span class="diff-popover">{{ change.oldValueFull ?? change.oldValuePreview ?? 'None' }}</span></span></td>
+                      <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ change.newValuePreview ?? 'None' }}</span><span class="diff-popover">{{ change.newValueFull ?? change.newValuePreview ?? 'None' }}</span></span></td>
                       <td><span class="status low">{{ change.importance }}</span></td>
                     </tr>
                   }
@@ -226,8 +226,8 @@
             @for (change of workflow.workflowSettingsChanges; track change.path) {
               <tr>
                 <td><code>{{ change.path }}</code></td>
-                <td>{{ change.oldValuePreview ?? 'None' }}</td>
-                <td>{{ change.newValuePreview ?? 'None' }}</td>
+                <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ change.oldValuePreview ?? 'None' }}</span><span class="diff-popover">{{ change.oldValueFull ?? change.oldValuePreview ?? 'None' }}</span></span></td>
+                <td class="diff-preview-cell"><span class="diff-preview-hint" tabindex="0"><span class="diff-preview">{{ change.newValuePreview ?? 'None' }}</span><span class="diff-popover">{{ change.newValueFull ?? change.newValuePreview ?? 'None' }}</span></span></td>
               </tr>
             }
           </tbody>
