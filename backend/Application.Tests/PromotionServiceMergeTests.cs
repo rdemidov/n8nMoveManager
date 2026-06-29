@@ -218,7 +218,7 @@ public sealed class PromotionServiceMergeTests
         public void EnsureBranch(string repoPath, string branchName) { }
         public Task<GitCommitResult> CommitChangesAsync(string repoPath, string environmentKey, IReadOnlyCollection<string> relativePaths, string? commitMessage, CancellationToken cancellationToken) => throw new NotSupportedException();
         public GitCommitDto AmendCommitMessage(string repoPath, string branchName, string commitSha, string commitMessage) => throw new NotSupportedException();
-        public GitCommitDto? GetCommit(string repoPath, string commitSha) => new(commitSha, commitSha[..Math.Min(10, commitSha.Length)], "Test", "Test", "test@example.com", DateTimeOffset.UtcNow);
+        public GitCommitDto? GetCommit(string repoPath, string commitSha) => new(commitSha, commitSha[..Math.Min(10, commitSha.Length)], "Test", "Test", "test@example.com", DateTimeOffset.UtcNow, null);
         public IReadOnlyList<GitCommitDto> GetRecentCommits(string repoPath, string branchName, int limit) => [];
         public IReadOnlyList<GitDiffFileDto> GetCommitDiff(string repoPath, string commitSha) => [];
         public IReadOnlyList<GitDiffFileDto> GetLatestDiff(string repoPath, string branchName) => [];

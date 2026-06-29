@@ -14,6 +14,12 @@ public sealed class WorkflowSemanticDiffService
         "triggerCount",
         "tags"
     };
+    private static readonly HashSet<string> NodeFieldsHandledSeparately = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "id",
+        "parameters",
+        "credentials"
+    };
 
     public WorkflowSemanticDiffCollectionDto CompareWorkflowFiles(
         IReadOnlyDictionary<string, string> oldFiles,
@@ -211,9 +217,14 @@ public sealed class WorkflowSemanticDiffService
         var credentialChanges = CompareCredentials(oldNode, newNode, nodeName);
         var metadataChanges = new List<ParameterSemanticDiffDto>();
 
-        AddFieldChange(oldNode, newNode, "position", "position", "low", metadataChanges);
-        AddFieldChange(oldNode, newNode, "disabled", "disabled", "normal", metadataChanges);
-        AddFieldChange(oldNode, newNode, "active", "active", "normal", metadataChanges);
+        foreach (var field in oldNode.EnumerateObject().Select(property => property.Name)
+                     .Concat(newNode.EnumerateObject().Select(property => property.Name))
+                     .Where(field => !NodeFieldsHandledSeparately.Contains(field))
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .OrderBy(field => field, StringComparer.OrdinalIgnoreCase))
+        {
+            AddFieldChange(oldNode, newNode, field, field, field.Equals("position", StringComparison.OrdinalIgnoreCase) ? "low" : "normal", metadataChanges);
+        }
 
         var changeType = parameterChanges.Count == 0 && credentialChanges.Count == 0 && metadataChanges.Count == 0
             ? "unchanged"

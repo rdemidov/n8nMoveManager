@@ -121,11 +121,19 @@
 
   <section class="panel stack-top">
     <header>
-      <h2>Nodes</h2>
-      <span class="status">{{ session()?.selection?.nodeSelections?.length }} nodes</span>
+      <div>
+        <h2>Nodes</h2>
+        <p class="empty">Only changed nodes are shown. Unchanged target nodes remain in the result.</p>
+      </div>
+      <div class="actions wrap-actions">
+        @if (nodeChangeSummary().modified > 0) { <span class="status on">{{ nodeChangeSummary().modified }} modified</span> }
+        @if (nodeChangeSummary().added > 0) { <span class="status on">{{ nodeChangeSummary().added }} added</span> }
+        @if (nodeChangeSummary().removed > 0) { <span class="status warning">{{ nodeChangeSummary().removed }} removed</span> }
+        @if (nodeChangeSummary().unchanged > 0) { <span class="status">{{ nodeChangeSummary().unchanged }} unchanged hidden</span> }
+      </div>
     </header>
     <div class="rows">
-      @for (node of session()?.selection?.nodeSelections; track node.nodeMatchKey) {
+      @for (node of changedNodeSelections(); track node.nodeMatchKey) {
         <details class="row detail-row" [open]="openedNodeKey() === node.nodeMatchKey || node.changeType === 'modified'">
           <summary>
             <strong>{{ node.nodeName }}</strong>
@@ -145,7 +153,13 @@
           </div>
 
           @if (parametersFor(node).length > 0) {
-            <table class="stack-top-small">
+            <table class="manual-merge-parameter-table stack-top-small">
+              <colgroup>
+                <col class="parameter-path-column" />
+                <col class="parameter-value-column" />
+                <col class="parameter-value-column" />
+                <col class="parameter-choice-column" />
+              </colgroup>
               <thead>
                 <tr><th>Parameter</th><th>Source</th><th>Target</th><th>Selected</th></tr>
               </thead>
@@ -169,6 +183,8 @@
             <p class="empty stack-top-small">No changed parameters for this node.</p>
           }
         </details>
+      } @empty {
+        <p class="empty">No node changes. Review workflow settings and connections below.</p>
       }
     </div>
   </section>

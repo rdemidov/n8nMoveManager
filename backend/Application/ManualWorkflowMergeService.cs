@@ -268,8 +268,6 @@ public sealed class ManualWorkflowMergeService
             }
         }
 
-        var sourceNodes = ReadNodeMap(state.SourceWorkflow);
-        var targetNodes = ReadNodeMap(state.TargetWorkflow);
         var resultNodes = new JsonArray();
         foreach (var selection in state.Selection.NodeSelections)
         {
@@ -278,8 +276,8 @@ public sealed class ManualWorkflowMergeService
                 continue;
             }
 
-            var sourceNode = sourceNodes.GetValueOrDefault(selection.NodeMatchKey);
-            var targetNode = targetNodes.GetValueOrDefault(selection.NodeMatchKey);
+            var sourceNode = FindWorkflowNode(state.SourceWorkflow, selection.SourceNodeId, selection.NodeName, selection.NodeType);
+            var targetNode = FindWorkflowNode(state.TargetWorkflow, selection.TargetNodeId, selection.NodeName, selection.NodeType);
             JsonObject? node = selection.Resolution switch
             {
                 "use-source" => CloneAndTrackSourceNode(state, sourceNode, mappings, selectedSourceCredentials),
@@ -370,36 +368,35 @@ public sealed class ManualWorkflowMergeService
 
     private ManualMergeSelectionDto BuildDefaultSelection(JsonObject sourceWorkflow, JsonObject targetWorkflow, WorkflowSemanticDiffDto semanticDiff)
     {
-        var sourceNodes = ReadNodeMap(sourceWorkflow);
-        var targetNodes = ReadNodeMap(targetWorkflow);
-        var allKeys = sourceNodes.Keys.Concat(targetNodes.Keys).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(key => key, StringComparer.OrdinalIgnoreCase).ToArray();
-        var nodeSelections = allKeys.Select(key =>
+        var nodeSelections = semanticDiff.NodeChanges.Select(node =>
         {
-            sourceNodes.TryGetValue(key, out var sourceNode);
-            targetNodes.TryGetValue(key, out var targetNode);
+            var sourceNode = FindWorkflowNode(sourceWorkflow, node.NodeId, node.NodeName, node.NodeType);
+            var targetNode = FindWorkflowNode(targetWorkflow, node.NodeId, node.NodeName, node.NodeType);
             var sourceId = ReadString(sourceNode, "id");
             var targetId = ReadString(targetNode, "id");
-            var name = ReadString(sourceNode, "name") ?? ReadString(targetNode, "name") ?? "Unnamed node";
-            var type = ReadString(sourceNode, "type") ?? ReadString(targetNode, "type") ?? "unknown";
-            var changeType = sourceNode is not null && targetNode is null
-                ? "added"
-                : sourceNode is null && targetNode is not null
-                    ? "removed"
-                    : JsonEquals(sourceNode, targetNode) ? "unchanged" : "modified";
-            var resolution = changeType switch
+            var resolution = node.ChangeType switch
             {
                 "added" => "use-source",
                 "modified" => "parameter-level",
                 _ => "use-target"
             };
-            return new NodeMergeSelectionDto(key, sourceId, targetId, name, type, changeType, resolution);
-        }).ToArray();
+            return new NodeMergeSelectionDto(PairMatchKey(sourceId, targetId, node.NodeName, node.NodeType), sourceId, targetId, node.NodeName, node.NodeType, node.ChangeType, resolution);
+        })
+        .OrderBy(node => NodeChangeOrder(node.ChangeType))
+        .ThenBy(node => node.NodeName, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(node => node.NodeType, StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
         var parameters = semanticDiff.NodeChanges
             .Where(node => node.ChangeType == "modified")
             .SelectMany(node =>
             {
-                var key = MatchKey(node.NodeId, node.NodeName, node.NodeType);
+                var key = nodeSelections.First(selection =>
+                    (!string.IsNullOrWhiteSpace(node.NodeId)
+                     && (string.Equals(selection.SourceNodeId, node.NodeId, StringComparison.Ordinal)
+                         || string.Equals(selection.TargetNodeId, node.NodeId, StringComparison.Ordinal)))
+                    || (string.Equals(selection.NodeName, node.NodeName, StringComparison.Ordinal)
+                        && string.Equals(selection.NodeType, node.NodeType, StringComparison.Ordinal))).NodeMatchKey;
                 return node.ParameterChanges.Select(parameter => new ParameterMergeSelectionDto(
                     key,
                     parameter.Path,
@@ -409,12 +406,10 @@ public sealed class ManualWorkflowMergeService
             })
             .ToArray();
 
-        var settingNames = sourceWorkflow.Select(item => item.Key)
-            .Concat(targetWorkflow.Select(item => item.Key))
-            .Where(name => !IgnoredWorkflowFields.Contains(name))
+        var settingNames = semanticDiff.WorkflowSettingsChanges
+            .Select(change => change.Path.Split(new[] { '.', '[' }, StringSplitOptions.RemoveEmptyEntries)[0])
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-            .Where(name => !JsonEquals(sourceWorkflow[name], targetWorkflow[name]))
             .Select(name => new WorkflowSettingMergeSelectionDto(
                 name,
                 Preview(sourceWorkflow[name]),
@@ -436,12 +431,12 @@ public sealed class ManualWorkflowMergeService
             state.BaseCommitSha,
             state.CreatedAt,
             state.UpdatedAt,
-            SummarizeWorkflow(state.WorkflowFilePath, state.SourceWorkflow, mappings, isSource: true),
-            SummarizeWorkflow(state.WorkflowFilePath, state.TargetWorkflow, mappings, isSource: false),
+            SummarizeWorkflow(state.WorkflowFilePath, state.SourceWorkflow, mappings, isSource: true, sameEnvironment: string.Equals(state.SourceEnvironmentKey, state.TargetEnvironmentKey, StringComparison.OrdinalIgnoreCase)),
+            SummarizeWorkflow(state.WorkflowFilePath, state.TargetWorkflow, mappings, isSource: false, sameEnvironment: string.Equals(state.SourceEnvironmentKey, state.TargetEnvironmentKey, StringComparison.OrdinalIgnoreCase)),
             state.SemanticDiff,
             state.Selection);
 
-    private ManualMergeWorkflowSummaryDto SummarizeWorkflow(string path, JsonObject workflow, IReadOnlyList<CredentialEnvironmentPair> mappings, bool isSource)
+    private ManualMergeWorkflowSummaryDto SummarizeWorkflow(string path, JsonObject workflow, IReadOnlyList<CredentialEnvironmentPair> mappings, bool isSource, bool sameEnvironment)
     {
         using var document = JsonDocument.Parse(workflow.ToJsonString());
         var name = ReadString(workflow, "name") ?? Path.GetFileNameWithoutExtension(path);
@@ -455,7 +450,7 @@ public sealed class ManualWorkflowMergeService
                     reference.CredentialType,
                     reference.CredentialId,
                     reference.CredentialName,
-                    !isSource || mapping is not null,
+                    !isSource || sameEnvironment || mapping is not null,
                     mapping?.Target.CredentialId,
                     mapping?.Target.CredentialName);
             })
@@ -530,25 +525,21 @@ public sealed class ManualWorkflowMergeService
             CredentialMappingMode = "target-mappings"
         };
 
-    private static Dictionary<string, JsonObject> ReadNodeMap(JsonObject workflow)
+    private static JsonObject? FindWorkflowNode(JsonObject workflow, string? nodeId, string nodeName, string nodeType)
     {
-        var nodes = workflow["nodes"] as JsonArray;
-        var map = new Dictionary<string, JsonObject>(StringComparer.OrdinalIgnoreCase);
-        if (nodes is null)
-        {
-            return map;
-        }
-
-        foreach (var node in nodes.OfType<JsonObject>())
-        {
-            map[MatchKey(ReadString(node, "id"), ReadString(node, "name") ?? "Unnamed node", ReadString(node, "type") ?? "unknown")] = node;
-        }
-
-        return map;
+        var nodes = (workflow["nodes"] as JsonArray)?.OfType<JsonObject>().ToArray() ?? [];
+        return !string.IsNullOrWhiteSpace(nodeId)
+            ? nodes.FirstOrDefault(node => string.Equals(ReadString(node, "id"), nodeId, StringComparison.Ordinal))
+              ?? nodes.FirstOrDefault(node => SameNodeNameAndType(node, nodeName, nodeType))
+            : nodes.FirstOrDefault(node => SameNodeNameAndType(node, nodeName, nodeType));
     }
 
-    private static string MatchKey(string? nodeId, string nodeName, string nodeType) =>
-        !string.IsNullOrWhiteSpace(nodeId) ? $"id:{nodeId}" : $"name-type:{nodeName}|{nodeType}";
+    private static bool SameNodeNameAndType(JsonObject node, string nodeName, string nodeType) =>
+        string.Equals(ReadString(node, "name"), nodeName, StringComparison.Ordinal)
+        && string.Equals(ReadString(node, "type"), nodeType, StringComparison.Ordinal);
+
+    private static string PairMatchKey(string? sourceNodeId, string? targetNodeId, string nodeName, string nodeType) =>
+        $"pair:{sourceNodeId ?? "-"}|{targetNodeId ?? "-"}|{nodeName}|{nodeType}";
 
     private static bool TryReadParameter(JsonObject node, string path, out JsonNode? value)
     {
@@ -698,6 +689,14 @@ public sealed class ManualWorkflowMergeService
             "parameter-level" => "parameter-level",
             _ => "use-target"
         };
+
+    private static int NodeChangeOrder(string changeType) => changeType switch
+    {
+        "modified" => 0,
+        "added" => 1,
+        "removed" => 2,
+        _ => 3
+    };
 
     private static string? ReadString(JsonObject? obj, string propertyName) =>
         obj?[propertyName]?.GetValue<string>();

@@ -47,6 +47,17 @@ export class ManualMergeComponent implements OnInit {
       excluded: nodes.filter((node) => node.resolution === 'exclude').length,
     };
   });
+  readonly nodeChangeSummary = computed(() => {
+    const nodes = this.session()?.selection.nodeSelections ?? [];
+    return {
+      modified: nodes.filter((node) => node.changeType === 'modified').length,
+      added: nodes.filter((node) => node.changeType === 'added').length,
+      removed: nodes.filter((node) => node.changeType === 'removed').length,
+      unchanged: nodes.filter((node) => node.changeType === 'unchanged').length,
+    };
+  });
+  readonly changedNodeSelections = computed(() =>
+    (this.session()?.selection.nodeSelections ?? []).filter((node) => node.changeType !== 'unchanged'));
   readonly mappedCredentialCount = computed(() =>
     this.session()?.sourceWorkflow.credentialReferences.filter((credential) => credential.isMapped).length ?? 0);
   readonly missingCredentialCount = computed(() =>

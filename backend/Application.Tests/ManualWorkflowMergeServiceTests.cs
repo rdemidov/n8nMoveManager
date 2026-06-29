@@ -43,6 +43,37 @@ public sealed class ManualWorkflowMergeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task CreateSessionListsChangedNodesBeforeUnchangedNodes()
+    {
+        await SeedAsync(
+            source: Workflow("Source", string.Join(",", Node("a", "Unchanged", "n8n-nodes-base.set", """{"value":"same"}"""), Node("z", "Changed", "n8n-nodes-base.set", """{"value":"source"}"""))),
+            target: Workflow("Target", string.Join(",", Node("a", "Unchanged", "n8n-nodes-base.set", """{"value":"same"}"""), Node("z", "Changed", "n8n-nodes-base.set", """{"value":"target"}"""))));
+        var service = CreateService();
+
+        var session = await service.CreateSessionAsync(Request(), CancellationToken.None);
+
+        Assert.Equal("Changed", session.Selection.NodeSelections[0].NodeName);
+        Assert.Equal("modified", session.Selection.NodeSelections[0].ChangeType);
+        Assert.Equal("unchanged", session.Selection.NodeSelections[^1].ChangeType);
+    }
+
+    [Fact]
+    public async Task CreateSessionUsesOneSemanticSelectionWhenEnvironmentNodeIdsDiffer()
+    {
+        await SeedAsync(
+            source: Workflow("Source", Node("source-id", "Shared", "n8n-nodes-base.set", """{"value":"same"}""")),
+            target: Workflow("Target", Node("target-id", "Shared", "n8n-nodes-base.set", """{"value":"same"}""")));
+        var service = CreateService();
+
+        var session = await service.CreateSessionAsync(Request(), CancellationToken.None);
+
+        var selection = Assert.Single(session.Selection.NodeSelections);
+        Assert.Equal("unchanged", selection.ChangeType);
+        Assert.Equal("source-id", selection.SourceNodeId);
+        Assert.Equal("target-id", selection.TargetNodeId);
+    }
+
+    [Fact]
     public async Task SelectingSourceNodeAddsItToResult()
     {
         await SeedAsync(

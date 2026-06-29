@@ -5,6 +5,20 @@ namespace Application.Tests;
 
 public sealed class WorkflowSemanticDiffServiceTests
 {
+    [Fact]
+    public void CompareWorkflowContent_CountsMeaningfulTopLevelNodeFields()
+    {
+        var oldWorkflow = Workflow("""[{ "id": "1", "name": "HTTP", "type": "n8n-nodes-base.httpRequest", "typeVersion": 1, "retryOnFail": false, "parameters": {} }]""");
+        var newWorkflow = Workflow("""[{ "id": "1", "name": "HTTP", "type": "n8n-nodes-base.httpRequest", "typeVersion": 2, "retryOnFail": true, "parameters": {} }]""");
+
+        var result = new WorkflowSemanticDiffService().CompareWorkflowContent(oldWorkflow, newWorkflow);
+
+        Assert.Equal(1, result.Summary.ModifiedNodes);
+        var node = Assert.Single(result.NodeChanges);
+        Assert.Contains(node.MetadataChanges, change => change.Path == "typeVersion");
+        Assert.Contains(node.MetadataChanges, change => change.Path == "retryOnFail");
+    }
+
     private readonly WorkflowSemanticDiffService _service = new();
 
     [Fact]

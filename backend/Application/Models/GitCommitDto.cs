@@ -6,4 +6,5 @@ public sealed record GitCommitDto(
     string Message,
     string AuthorName,
     string AuthorEmail,
-    DateTimeOffset When);
+    DateTimeOffset When,
+    string? ParentSha);

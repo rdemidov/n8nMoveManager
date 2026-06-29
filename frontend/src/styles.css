@@ -1306,6 +1306,47 @@ code {
 
 .detail-row {
   display: block;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.manual-merge-parameter-table {
+  max-width: 100%;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.manual-merge-parameter-table .parameter-path-column {
+  width: 14%;
+}
+
+.manual-merge-parameter-table .parameter-value-column {
+  width: 36%;
+}
+
+.manual-merge-parameter-table .parameter-choice-column {
+  width: 14%;
+}
+
+.manual-merge-parameter-table th,
+.manual-merge-parameter-table td {
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.manual-merge-parameter-table code {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.manual-merge-parameter-table select {
+  max-width: 100%;
+  width: 100%;
 }
 
 .detail-row summary {

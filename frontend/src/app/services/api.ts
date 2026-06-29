@@ -327,6 +327,7 @@ export interface GitCommit {
   authorName: string;
   authorEmail: string;
   when: string;
+  parentSha: string | null;
 }
 
 export interface GitDiffFile {

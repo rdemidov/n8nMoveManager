@@ -105,7 +105,8 @@ public sealed class GitRepositoryService : IGitRepositoryService
             amended.MessageShort,
             amended.Author.Name,
             amended.Author.Email,
-            amended.Author.When);
+            amended.Author.When,
+            amended.Parents.FirstOrDefault()?.Sha);
     }
 
     public IReadOnlyList<GitCommitDto> GetRecentCommits(string repoPath, string branchName, int limit)
@@ -130,7 +131,8 @@ public sealed class GitRepositoryService : IGitRepositoryService
                 commit.MessageShort,
                 commit.Author.Name,
                 commit.Author.Email,
-                commit.Author.When))
+                commit.Author.When,
+                commit.Parents.FirstOrDefault()?.Sha))
             .ToArray();
     }
 
@@ -151,7 +153,8 @@ public sealed class GitRepositoryService : IGitRepositoryService
                 commit.MessageShort,
                 commit.Author.Name,
                 commit.Author.Email,
-                commit.Author.When);
+                commit.Author.When,
+                commit.Parents.FirstOrDefault()?.Sha);
     }
 
     public IReadOnlyList<GitDiffFileDto> GetCommitDiff(string repoPath, string commitSha)
