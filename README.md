@@ -1,6 +1,6 @@
 # n8n Move Manager
 
-n8n Move Manager is a self-hosted .NET 9 and Angular 22 application for keeping n8n workflows and Data Table schemas under Git-backed change control. It imports workflow snapshots from files, Docker, or the n8n public API; normalizes them; stores each environment on its own branch; and provides review, promotion, merge, restore, and deployment workflows.
+n8n Move Manager is a self-hosted .NET 10 and Angular 22 application for keeping n8n workflows and Data Table schemas under Git-backed change control. It imports workflow snapshots from files, Docker, or the n8n public API; normalizes them; stores each environment on its own branch; and provides review, promotion, merge, restore, and deployment workflows.
 
 The first run creates a **Local** environment with key `local` on branch `env/local`. Imports only update the selected environment branch. Nothing is automatically promoted or activated in n8n, and credential secrets are never exported.
 
@@ -13,7 +13,7 @@ The first run creates a **Local** environment with key `local` on branch `env/lo
 - Browse commits, raw patches, and workflow-aware semantic diffs; edit commit messages and inspect or download files from a commit.
 - Compare environments, create promotion plans and baselines, preview merges, and resolve per-workflow conflicts in the manual merge assistant.
 - Inventory credential references, define logical credentials, map them per environment, and export remapped workflow snapshots without storing secrets.
-- Sync and compare n8n Data Table schemas, stage promotion snapshots, and explicitly deploy selected schemas to a live target.
+- Sync and compare n8n Data Table schemas, map environment-specific table IDs manually or with AI, stage promotion snapshots, and explicitly deploy selected schemas to a live target.
 - Preview and deploy selected workflows through the n8n API. Deployed workflows remain inactive.
 - Create ZIP backups, restore a workflow or an entire environment from a commit, and review restore history.
 - Inspect recent failed n8n executions for an environment.
@@ -22,7 +22,7 @@ The first run creates a **Local** environment with key `local` on branch `env/lo
 
 ## Tech stack
 
-- Backend: ASP.NET Core Minimal API on .NET 9
+- Backend: ASP.NET Core Minimal API on .NET 10
 - Frontend: Angular 22, TypeScript 6, RxJS 7
 - Metadata: SQLite with Entity Framework Core
 - Versioning: LibGit2Sharp
@@ -56,8 +56,8 @@ Persist all of `App_Data`, especially `protection-keys`: n8n and AI API keys are
 
 Prerequisites:
 
-- .NET 9 SDK
-- Node.js with npm (the frontend currently declares npm 11.12.1)
+- .NET 10 SDK
+- Node.js with npm
 - Docker only if you want Docker export or the Compose deployment
 
 Start the API:
@@ -94,6 +94,19 @@ The first authenticated start creates the bootstrap administrator. `Viewer` can 
 
 The included stack builds both applications. The UI proxies API traffic over the internal Compose network, while a named volume persists all application data.
 
+Create `.env` from the example and set these values:
+
+```dotenv
+AUTH_ENABLED=true
+AUTH_SIGNING_KEY=replace-with-a-random-secret-at-least-32-characters-long
+AUTH_BOOTSTRAP_ADMIN_USER=admin
+AUTH_BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-strong-password-at-least-12-characters
+WEB_PORT=4300
+API_PORT=5107
+```
+
+`AUTH_SIGNING_KEY` signs JWTs and must be a random secret of at least 32 characters. The bootstrap password must contain at least 12 characters. Bootstrap credentials create the first administrator only when the user database is empty; changing them later does not reset an existing administrator. Keep `.env` private and never commit real credentials.
+
 ```powershell
 Copy-Item .env.example .env
 # Replace every placeholder in .env.
@@ -111,16 +124,77 @@ docker compose down
 
 The default API image does not include a Docker CLI or mount the host Docker socket. Enabling container export in a Compose deployment requires both. A Docker socket mount gives the API high privileges over the host and should only be used in a trusted environment.
 
-## Typical workflow
+## How to use
 
-1. Create environments for the n8n instances you manage.
-2. Import workflow snapshots by upload, Docker export, or n8n API sync.
-3. Review Git history and semantic diffs.
-4. Configure logical credential mappings between source and target environments.
-5. Compare environments and build a promotion plan.
-6. Preview the merge and resolve conflicts in the manual merge assistant when needed.
-7. Apply the approved snapshot to the target environment branch.
-8. Separately preview and explicitly deploy selected workflows or Data Table schemas to the target n8n instance.
+### 1. Sign in
+
+Open the web address for the way you started the application:
+
+- Local development: `http://localhost:4200`
+- Docker Compose with the default port: `http://localhost:4300`
+
+When authentication is enabled, sign in with `AUTH_BOOTSTRAP_ADMIN_USER` and `AUTH_BOOTSTRAP_ADMIN_PASSWORD`. These credentials create the first administrator only when the user database is empty.
+
+### 2. Create the environments
+
+Open **Environments**. The application creates `local` automatically; add an environment for each additional n8n instance. Give each environment:
+
+- a readable name, such as `Production`;
+- a stable lowercase key, such as `production`;
+- a unique Git branch, such as `env/production`; and
+- optional notes describing the instance.
+
+Use the environment selector in the sidebar before working with environment-specific workflows, credentials, or Data Tables.
+
+### 3. Connect each n8n instance
+
+Select an environment, open **Data Tables**, and configure **n8n API connection**:
+
+1. Enable API sync.
+2. Enter the n8n base URL and API key.
+3. Keep the workflow path as `/api/v1/workflows` unless the instance uses a different path.
+4. Set the Data Tables read path for the installed n8n version.
+5. To allow live schema updates, provide a write path containing `{id}`.
+6. Select **Save connection**.
+
+Repeat this for every environment. API keys are encrypted at rest and are not written into workflow snapshots or Git.
+
+### 4. Import workflow and table snapshots
+
+Open **Workflows List**, select **Preview n8n changes**, review the reconciliation results, select the remote changes you want, and choose **Sync selected**. Alternatively, use **Upload Workflows** for exported JSON files or **Docker Export** for a locally reachable container.
+
+For Data Tables, open **Data Tables** and select **Sync schemas**. This stores table names, IDs, columns, and row counts; it never copies table rows.
+
+### 5. Configure mappings
+
+Open **Mappings** to pair credentials that serve the same purpose in the source and target environments. Create the pairs manually or use **AI create mappings**, then run export validation. Credential secrets are never copied.
+
+For Data Tables:
+
+1. Open **Data Tables** in the source environment.
+2. Choose the target under **Compare environments** and select **Compare**.
+3. In **Data Table mappings**, pair each source table with its target counterpart, or select **AI create mappings**.
+4. Review AI warnings and skipped suggestions. Existing manual mappings are not overwritten automatically.
+
+Mappings are necessary because credential and Data Table IDs normally differ between n8n environments.
+
+### 6. Review and promote Git snapshots
+
+Open **Promotion**, choose different source and target environments, and generate the plan. Review semantic workflow changes, credential checks, warnings, and blocking errors. Use **Manual Merge** when a workflow needs conflict resolution, then preview and apply the approved changes to the target Git branch.
+
+Promotion changes the managed Git snapshot only. It does not modify the live target n8n instance.
+
+### 7. Deploy to the target n8n instance
+
+To deploy workflows, open **Workflows List** in the source environment, select workflows, choose the target, and select **Preview deployment**. Resolve every missing or stale credential/Data Table mapping, then choose **Deploy selected workflows**. Deployed workflows remain inactive so activation stays an explicit n8n action.
+
+To deploy table schemas, open **Data Tables**, compare with the target, select changed mapped tables, and choose **Deploy selected schemas**. Only schemas are updated; rows are never copied.
+
+When authentication is enabled, live deployment requires an `Approver` or `Admin` account.
+
+### 8. Audit and recover
+
+Use **Git History** and **Latest Diff** to inspect committed changes. Use **Backups** before significant promotions or deployments, and always preview a restore before applying it. **Scheduled Jobs** can automate snapshot imports and backups without automatically promoting or deploying them.
 
 Git promotion and live n8n deployment are intentionally separate operations.
 
@@ -148,7 +222,9 @@ The service creates or updates workflows through the target's configured workflo
 
 ## Data Tables
 
-The Data Tables screen can sync schema snapshots from n8n, compare source and target environments, generate a promotion plan, and stage selected schemas into the target Git branch. Live schema deployment is a separate confirmed action requiring `Approver` or `Admin` and is recorded in the deployment audit.
+The Data Tables screen can sync schema snapshots from n8n, compare source and target environments, map source table IDs to their environment-specific target IDs, generate a promotion plan, and stage selected schemas into the target Git branch. After choosing a target and running **Compare**, use **Data Table mappings** to save pairs manually or select **AI create mappings**. AI suggestions use table names and column schemas, are validated against synced snapshots, and never overwrite an existing mapping automatically.
+
+Workflow deployment validates these mappings and rewrites Data Table node references to target IDs. Missing or stale table mappings block deployment. Live schema deployment is a separate confirmed action requiring `Approver` or `Admin` when authentication is enabled and is recorded in the deployment audit.
 
 Data Table endpoints can vary between n8n releases. Verify the configured read path and write-path template against the target n8n instance before enabling live deployment.
 
@@ -183,7 +259,7 @@ Restore always starts with a preview. You can restore one workflow or reconstruc
 
 AI features are disabled until configured under **AI Settings**. The default values target OpenAI's chat-completions endpoint and `gpt-4.1-mini`, but the endpoint and model are configurable. Test the connection before using AI actions.
 
-Only scoped workflow, diff, promotion, or credential metadata is assembled for a request, and sensitive fields are redacted by the context builder. Review AI output as advisory: deterministic validation, previews, role checks, and explicit confirmation remain authoritative.
+Only scoped workflow, diff, promotion, credential, or Data Table schema metadata is assembled for a request, and sensitive fields are redacted by the context builder. Review AI output as advisory: deterministic validation, previews, role checks, and explicit confirmation remain authoritative.
 
 ## Normalization and safety
 
@@ -215,6 +291,9 @@ POST   /api/promotions/merge-preview
 POST   /api/promotions/apply
 POST   /api/workflows/deployment/preview
 POST   /api/workflows/deployment/deploy
+GET    /api/data-tables/mappings
+POST   /api/data-tables/mappings
+POST   /api/data-tables/ai-create-mappings
 GET    /api/backups
 GET    /api/scheduled-jobs
 ```
