@@ -150,13 +150,24 @@ export interface WorkflowApiReconciliationPreview {
 export interface DataTableComparison {
   sourceEnvironmentKey: string;
   targetEnvironmentKey: string;
-  items: { id: string; name: string; status: string; sourceRowCount: number | null; targetRowCount: number | null }[];
+  items: DataTableComparisonItem[];
+}
+
+export interface DataTableComparisonItem {
+  id: string;
+  name: string;
+  status: string;
+  sourceRowCount: number | null;
+  targetRowCount: number | null;
+  sourceTableId: string | null;
+  targetTableId: string | null;
+  mappingId: string | null;
 }
 
 export interface DataTablePromotionPlan {
   sourceEnvironmentKey: string;
   targetEnvironmentKey: string;
-  changes: { id: string; name: string; status: string; sourceRowCount: number | null; targetRowCount: number | null }[];
+  changes: DataTableComparisonItem[];
   changeCount: number;
   safetyNotice: string;
 }
@@ -167,6 +178,37 @@ export interface DataTablePromotionApplyResult {
   stagedTablesCount: number;
   commitSha: string | null;
   skippedCommit: boolean;
+}
+
+export interface DataTableMapping {
+  id: string;
+  sourceEnvironmentKey: string;
+  targetEnvironmentKey: string;
+  sourceTableId: string;
+  sourceTableName: string;
+  targetTableId: string;
+  targetTableName: string;
+  updatedAt: string;
+}
+
+export interface AiDataTableMappingResult {
+  sourceEnvironmentKey: string;
+  targetEnvironmentKey: string;
+  suggestedMappingsCount: number;
+  appliedMappingsCount: number;
+  items: AiDataTableMappingAppliedItem[];
+  warnings: string[];
+}
+
+export interface AiDataTableMappingAppliedItem {
+  sourceTableId: string;
+  targetTableId: string;
+  sourceTableName: string;
+  targetTableName: string;
+  reason: string;
+  confidence: 'low' | 'medium' | 'high';
+  applied: boolean;
+  skippedReason: string | null;
 }
 
 export interface WorkflowImportItem {
@@ -902,6 +944,22 @@ export class ApiService {
 
   getDataTablePromotionPlan(source: string, target: string): Observable<DataTablePromotionPlan> {
     return this.http.get<DataTablePromotionPlan>(`${this.baseUrl}/data-tables/promotion-plan?source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`);
+  }
+
+  getDataTableMappings(source: string, target: string): Observable<DataTableMapping[]> {
+    return this.http.get<DataTableMapping[]>(`${this.baseUrl}/data-tables/mappings?source=${encodeURIComponent(source)}&target=${encodeURIComponent(target)}`);
+  }
+
+  saveDataTableMapping(request: { sourceEnvironmentKey: string; targetEnvironmentKey: string; sourceTableId: string; targetTableId: string }): Observable<DataTableMapping> {
+    return this.http.post<DataTableMapping>(`${this.baseUrl}/data-tables/mappings`, request);
+  }
+
+  deleteDataTableMapping(mappingId: string): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}/data-tables/mappings/${mappingId}`);
+  }
+
+  createDataTableMappingsWithAi(sourceEnvironmentKey: string, targetEnvironmentKey: string): Observable<AiDataTableMappingResult> {
+    return this.http.post<AiDataTableMappingResult>(`${this.baseUrl}/data-tables/ai-create-mappings`, { sourceEnvironmentKey, targetEnvironmentKey });
   }
 
   stageDataTablePromotion(sourceEnvironmentKey: string, targetEnvironmentKey: string, tableIds: string[]): Observable<DataTablePromotionApplyResult> {

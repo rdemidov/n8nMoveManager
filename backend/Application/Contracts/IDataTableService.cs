@@ -10,4 +10,7 @@ public interface IDataTableService
     Task<DataTablePromotionPlan> GetPromotionPlanAsync(string sourceEnvironmentKey, string targetEnvironmentKey, CancellationToken cancellationToken);
     Task<DataTablePromotionApplyResult> ApplyPromotionAsync(DataTablePromotionApplyRequest request, CancellationToken cancellationToken);
     Task<DataTableLiveDeployResult> DeploySchemasAsync(DataTableLiveDeployRequest request, CancellationToken cancellationToken);
+    Task<IReadOnlyList<DataTableMappingDto>> GetMappingsAsync(string sourceEnvironmentKey, string targetEnvironmentKey, CancellationToken cancellationToken);
+    Task<DataTableMappingDto> SaveMappingAsync(DataTableMappingRequest request, CancellationToken cancellationToken);
+    Task DeleteMappingAsync(Guid mappingId, CancellationToken cancellationToken);
 }

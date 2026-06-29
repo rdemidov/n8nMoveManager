@@ -25,6 +25,7 @@ public sealed class AppDbContext : DbContext
     public DbSet<EnvironmentN8nApiConfig> EnvironmentN8nApiConfigs => Set<EnvironmentN8nApiConfig>();
     public DbSet<DataTableSnapshot> DataTableSnapshots => Set<DataTableSnapshot>();
     public DbSet<DataTableDeploymentAudit> DataTableDeploymentAudits => Set<DataTableDeploymentAudit>();
+    public DbSet<DataTableMapping> DataTableMappings => Set<DataTableMapping>();
     public DbSet<ScheduledJob> ScheduledJobs => Set<ScheduledJob>();
     public DbSet<ScheduledJobRun> ScheduledJobRuns => Set<ScheduledJobRun>();
     public DbSet<LocalUser> LocalUsers => Set<LocalUser>();
@@ -175,6 +176,14 @@ public sealed class AppDbContext : DbContext
             entity.Property(table => table.ColumnsJson).IsRequired();
             entity.HasIndex(table => new { table.EnvironmentId, table.ExternalId }).IsUnique();
             entity.HasIndex(table => new { table.WorkspaceId, table.EnvironmentKey, table.Name });
+        });
+
+        modelBuilder.Entity<DataTableMapping>(entity =>
+        {
+            entity.HasKey(mapping => mapping.Id);
+            entity.Property(mapping => mapping.SourceTableId).HasMaxLength(300).IsRequired();
+            entity.Property(mapping => mapping.TargetTableId).HasMaxLength(300).IsRequired();
+            entity.HasIndex(mapping => new { mapping.WorkspaceId, mapping.SourceEnvironmentId, mapping.TargetEnvironmentId, mapping.SourceTableId }).IsUnique();
         });
 
         modelBuilder.Entity<ScheduledJob>(entity =>

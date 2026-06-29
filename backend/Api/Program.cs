@@ -71,6 +71,7 @@ builder.Services.AddScoped<DockerN8nExportService>();
 builder.Services.AddScoped<AiContextBuilder>();
 builder.Services.AddScoped<AiDiffAssistantService>();
 builder.Services.AddScoped<AiCredentialMappingService>();
+builder.Services.AddScoped<AiDataTableMappingService>();
 
 var app = builder.Build();
 
@@ -116,6 +117,7 @@ using (var scope = app.Services.CreateScope())
     await EnsureIteration11SchemaAsync(dbContext);
     await EnsureIteration12SchemaAsync(dbContext);
     await EnsureIteration13SchemaAsync(dbContext);
+    await EnsureIteration14SchemaAsync(dbContext);
     var workspaceService = scope.ServiceProvider.GetRequiredService<IWorkspaceService>();
     var environmentService = scope.ServiceProvider.GetRequiredService<IEnvironmentService>();
     var gitService = scope.ServiceProvider.GetRequiredService<IGitRepositoryService>();
@@ -406,26 +408,53 @@ api.MapGet("/data-tables/compare", async (string source, string target, IDataTab
 api.MapGet("/data-tables/promotion-plan", async (string source, string target, IDataTableService dataTableService, CancellationToken cancellationToken) =>
     Results.Ok(await dataTableService.GetPromotionPlanAsync(source, target, cancellationToken)));
 
+api.MapGet("/data-tables/mappings", async (string source, string target, IDataTableService dataTableService, CancellationToken cancellationToken) =>
+    Results.Ok(await dataTableService.GetMappingsAsync(source, target, cancellationToken)));
+
+api.MapPost("/data-tables/mappings", async (DataTableMappingRequest request, IDataTableService dataTableService, CancellationToken cancellationToken) =>
+{
+    try { return Results.Ok(await dataTableService.SaveMappingAsync(request, cancellationToken)); }
+    catch (WorkflowImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
+api.MapDelete("/data-tables/mappings/{mappingId:guid}", async (Guid mappingId, IDataTableService dataTableService, CancellationToken cancellationToken) =>
+{
+    await dataTableService.DeleteMappingAsync(mappingId, cancellationToken);
+    return Results.NoContent();
+});
+
+api.MapPost("/data-tables/ai-create-mappings", async (AiDataTableMappingRequest request, AiDataTableMappingService service, CancellationToken cancellationToken) =>
+{
+    try { return Results.Ok(await service.CreateMappingsAsync(request, cancellationToken)); }
+    catch (Exception ex) when (ex is WorkflowImportException or InvalidOperationException or HttpRequestException or TaskCanceledException) { return Results.BadRequest(new { error = ex.Message }); }
+});
+
 api.MapPost("/data-tables/promotions/stage", async (DataTablePromotionApplyRequest request, IDataTableService dataTableService, CancellationToken cancellationToken) =>
 {
     try { return Results.Ok(await dataTableService.ApplyPromotionAsync(request, cancellationToken)); }
     catch (WorkflowImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
 });
-api.MapPost("/data-tables/promotions/deploy-live", async (DataTableLiveDeployRequest request, IDataTableService dataTableService, CancellationToken cancellationToken) =>
+var deployDataTablesEndpoint = api.MapPost("/data-tables/promotions/deploy-live", async (DataTableLiveDeployRequest request, IDataTableService dataTableService, CancellationToken cancellationToken) =>
 {
     try { return Results.Ok(await dataTableService.DeploySchemasAsync(request, cancellationToken)); }
     catch (WorkflowImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
-}).RequireAuthorization("approver");
-api.MapPost("/workflows/deployment/preview", async (WorkflowDeploymentPreviewRequest request, IWorkflowDeploymentService deploymentService, CancellationToken cancellationToken) =>
+});
+var previewWorkflowDeploymentEndpoint = api.MapPost("/workflows/deployment/preview", async (WorkflowDeploymentPreviewRequest request, IWorkflowDeploymentService deploymentService, CancellationToken cancellationToken) =>
 {
     try { return Results.Ok(await deploymentService.PreviewAsync(request, cancellationToken)); }
     catch (WorkflowImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
-}).RequireAuthorization("approver");
-api.MapPost("/workflows/deployment/deploy", async (WorkflowDeploymentApplyRequest request, IWorkflowDeploymentService deploymentService, CancellationToken cancellationToken) =>
+});
+var deployWorkflowsEndpoint = api.MapPost("/workflows/deployment/deploy", async (WorkflowDeploymentApplyRequest request, IWorkflowDeploymentService deploymentService, CancellationToken cancellationToken) =>
 {
     try { return Results.Ok(await deploymentService.DeployAsync(request, cancellationToken)); }
     catch (WorkflowImportException ex) { return Results.BadRequest(new { error = ex.Message }); }
-}).RequireAuthorization("approver");
+});
+if (authEnabled)
+{
+    deployDataTablesEndpoint.RequireAuthorization("approver");
+    previewWorkflowDeploymentEndpoint.RequireAuthorization("approver");
+    deployWorkflowsEndpoint.RequireAuthorization("approver");
+}
 api.MapGet("/data-tables/deployment-audit", async (AppDbContext db, CancellationToken cancellationToken) => Results.Ok(await db.DataTableDeploymentAudits.AsNoTracking().OrderByDescending(x => x.CreatedAt).Take(100).ToArrayAsync(cancellationToken)));
 
 api.MapPost("/environments/{environmentKey}/workflows/upload", async Task<Results<Ok<object>, BadRequest<object>>> (
@@ -1780,4 +1809,10 @@ static async Task EnsureIteration13SchemaAsync(AppDbContext dbContext)
     catch (Exception ex) when (ex.GetBaseException().Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase)) { }
     try { await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE DataTableDeploymentAudits ADD COLUMN ActorUserName TEXT NULL"); }
     catch (Exception ex) when (ex.GetBaseException().Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase)) { }
+}
+
+static async Task EnsureIteration14SchemaAsync(AppDbContext dbContext)
+{
+    await dbContext.Database.ExecuteSqlRawAsync("CREATE TABLE IF NOT EXISTS DataTableMappings (Id TEXT NOT NULL PRIMARY KEY, WorkspaceId TEXT NOT NULL, SourceEnvironmentId TEXT NOT NULL, TargetEnvironmentId TEXT NOT NULL, SourceTableId TEXT NOT NULL, TargetTableId TEXT NOT NULL, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL)");
+    await dbContext.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX IF NOT EXISTS IX_DataTableMappings_WorkspaceId_SourceEnvironmentId_TargetEnvironmentId_SourceTableId ON DataTableMappings (WorkspaceId, SourceEnvironmentId, TargetEnvironmentId, SourceTableId)");
 }

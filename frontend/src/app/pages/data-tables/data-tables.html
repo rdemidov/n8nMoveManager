@@ -53,6 +53,27 @@
   </div>
 </section>
 
+@if (targetEnvironment && comparison()) {
+<section class="panel table-panel stack-top">
+  <header><div><h2>Data Table mappings</h2><p class="empty">Map environment-specific table IDs. Workflow deployment replaces source IDs with these target IDs.</p></div><button class="button" type="button" (click)="createMappingsWithAi()" [disabled]="aiMappingLoading()">{{ aiMappingLoading() ? 'Creating mappings…' : 'AI create mappings' }}</button></header>
+  <div class="selector-grid">
+    <label><span>Source table</span><select [ngModel]="sourceTableId" (ngModelChange)="chooseSourceTable($event)"><option value="">Choose a source table</option>@for (table of mappingSourceTables(); track table.id) { <option [value]="table.id">{{ table.name }} · {{ table.id }}</option> }</select></label>
+    <label><span>Target table</span><select [(ngModel)]="targetTableId"><option value="">Choose a target table</option>@for (table of mappingTargetTables(); track table.id) { <option [value]="table.id">{{ table.name }} · {{ table.id }}</option> }</select></label>
+    <button class="button primary" type="button" (click)="saveMapping()" [disabled]="!sourceTableId || !targetTableId">Save mapping</button>
+  </div>
+  @if (aiMappingResult()) {
+    <div class="alert">AI applied {{ aiMappingResult()?.appliedMappingsCount }} of {{ aiMappingResult()?.suggestedMappingsCount }} suggestion(s).
+      @for (warning of aiMappingResult()?.warnings ?? []; track warning) { <div>{{ warning }}</div> }
+      @for (item of aiMappingResult()?.items ?? []; track item.sourceTableId + item.targetTableId) { @if (!item.applied) { <div>{{ item.sourceTableName }} → {{ item.targetTableName }} skipped: {{ item.skippedReason }}</div> } }
+    </div>
+  }
+  <table><thead><tr><th>Source table</th><th>Target table</th><th></th></tr></thead><tbody>
+    @for (mapping of mappings(); track mapping.id) { <tr><td>{{ mapping.sourceTableName }}<br /><code>{{ mapping.sourceTableId }}</code></td><td>{{ mapping.targetTableName }}<br /><code>{{ mapping.targetTableId }}</code></td><td><button class="icon-button" type="button" title="Remove mapping" aria-label="Remove mapping" (click)="deleteMapping(mapping)">&times;</button></td></tr> }
+    @empty { <tr><td colspan="3" class="empty">No mappings yet. Map each source table used by promoted workflows.</td></tr> }
+  </tbody></table>
+</section>
+}
+
 <section class="panel table-panel stack-top">
   <header><h2>Schema snapshots</h2><div class="table-actions"><input [(ngModel)]="search" (keyup.enter)="page.set(1); loadTables()" placeholder="Search tables" /><button class="button" type="button" (click)="page.set(1); loadTables()">Search</button></div></header>
   <table><thead><tr><th>Name</th><th>ID</th><th>Columns</th><th>Rows</th><th>Last synced</th></tr></thead>
@@ -64,8 +85,8 @@
 </section>
 
 @if (comparison()) {
-<section class="panel table-panel stack-top"><header><h2>Comparison</h2></header><table><thead><tr><th>Table</th><th>Status</th><th>Source rows</th><th>Target rows</th></tr></thead><tbody>
-@for (item of comparison()?.items ?? []; track item.id) { <tr><td>{{ item.name }}</td><td><span class="status" [class.warning]="item.status !== 'in-sync'">{{ item.status }}</span></td><td>{{ item.sourceRowCount ?? 'unknown' }}</td><td>{{ item.targetRowCount ?? 'unknown' }}</td></tr> }
+<section class="panel table-panel stack-top"><header><h2>Comparison</h2></header><table><thead><tr><th>Table</th><th>Target ID</th><th>Status</th><th>Source rows</th><th>Target rows</th></tr></thead><tbody>
+@for (item of comparison()?.items ?? []; track item.id) { <tr><td>{{ item.name }}</td><td><code>{{ item.targetTableId ?? 'not mapped' }}</code></td><td><span class="status" [class.warning]="item.status !== 'in-sync'">{{ item.status }}</span></td><td>{{ item.sourceRowCount ?? 'unknown' }}</td><td>{{ item.targetRowCount ?? 'unknown' }}</td></tr> }
 </tbody></table></section> }
 
 @if (promotionPlan()) {

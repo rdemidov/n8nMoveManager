@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, effect, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ApiService, DataTableComparison, DataTableItem, DataTablePromotionPlan, N8nApiConfigRequest } from '../../services/api';
+import { AiDataTableMappingResult, ApiService, DataTableComparison, DataTableItem, DataTableMapping, DataTablePromotionPlan, N8nApiConfigRequest } from '../../services/api';
 import { ConfirmationService } from '../../services/confirmation';
 
 @Component({
@@ -26,6 +26,13 @@ export class DataTablesComponent {
   search = '';
   targetEnvironment = '';
   selectedTableIds = signal<string[]>([]);
+  mappingSourceTables = signal<DataTableItem[]>([]);
+  mappingTargetTables = signal<DataTableItem[]>([]);
+  mappings = signal<DataTableMapping[]>([]);
+  aiMappingLoading = signal(false);
+  aiMappingResult = signal<AiDataTableMappingResult | null>(null);
+  sourceTableId = '';
+  targetTableId = '';
   apiKey = '';
   form: N8nApiConfigRequest = { enabled: false, baseUrl: '', dataTablesPath: '/api/v1/data-tables', dataTablesWritePathTemplate: '', workflowApiPath: '/api/v1/workflows', apiKey: '' };
 
@@ -88,8 +95,73 @@ export class DataTablesComponent {
       next: (result) => {
         this.comparison.set(result);
         this.loadPromotionPlan();
+        this.loadMappingOptions();
       },
       error: (response) => this.error.set(response?.error?.error ?? 'Could not compare Data Tables.'),
+    });
+  }
+
+  loadMappingOptions(): void {
+    if (!this.targetEnvironment) return;
+    this.api.getDataTables(this.api.selectedEnvironmentKey(), 1, 100).subscribe({
+      next: (result) => this.mappingSourceTables.set(result.items),
+      error: (response) => this.error.set(response?.error?.error ?? 'Could not load source Data Tables.'),
+    });
+    this.api.getDataTables(this.targetEnvironment, 1, 100).subscribe({
+      next: (result) => this.mappingTargetTables.set(result.items),
+      error: (response) => this.error.set(response?.error?.error ?? 'Could not load target Data Tables.'),
+    });
+    this.loadMappings();
+  }
+
+  loadMappings(): void {
+    if (!this.targetEnvironment) return;
+    this.api.getDataTableMappings(this.api.selectedEnvironmentKey(), this.targetEnvironment).subscribe({
+      next: (mappings) => this.mappings.set(mappings),
+      error: (response) => this.error.set(response?.error?.error ?? 'Could not load Data Table mappings.'),
+    });
+  }
+
+  chooseSourceTable(sourceTableId: string): void {
+    this.sourceTableId = sourceTableId;
+    const source = this.mappingSourceTables().find((table) => table.id === sourceTableId);
+    const sameName = source && this.mappingTargetTables().find((table) => table.name.toLocaleLowerCase() === source.name.toLocaleLowerCase());
+    if (sameName) this.targetTableId = sameName.id;
+  }
+
+  saveMapping(): void {
+    if (!this.targetEnvironment || !this.sourceTableId || !this.targetTableId) return;
+    this.api.saveDataTableMapping({ sourceEnvironmentKey: this.api.selectedEnvironmentKey(), targetEnvironmentKey: this.targetEnvironment, sourceTableId: this.sourceTableId, targetTableId: this.targetTableId }).subscribe({
+      next: () => { this.message.set('Data Table mapping saved.'); this.sourceTableId = ''; this.targetTableId = ''; this.loadMappings(); this.compare(); },
+      error: (response) => this.error.set(response?.error?.error ?? 'Could not save the Data Table mapping.'),
+    });
+  }
+
+  async deleteMapping(mapping: DataTableMapping): Promise<void> {
+    if (!await this.confirmation.confirm({ title: 'Remove Data Table mapping?', message: `${mapping.sourceTableName} will no longer be remapped to ${mapping.targetTableName} during workflow deployment.`, confirmLabel: 'Remove mapping', danger: true })) return;
+    this.api.deleteDataTableMapping(mapping.id).subscribe({
+      next: () => { this.message.set('Data Table mapping removed.'); this.loadMappings(); this.compare(); },
+      error: (response) => this.error.set(response?.error?.error ?? 'Could not remove the Data Table mapping.'),
+    });
+  }
+
+  createMappingsWithAi(): void {
+    if (!this.targetEnvironment || this.aiMappingLoading()) return;
+    this.aiMappingLoading.set(true);
+    this.aiMappingResult.set(null);
+    this.error.set(null);
+    this.api.createDataTableMappingsWithAi(this.api.selectedEnvironmentKey(), this.targetEnvironment).subscribe({
+      next: (result) => {
+        this.aiMappingResult.set(result);
+        this.message.set(`AI applied ${result.appliedMappingsCount} of ${result.suggestedMappingsCount} suggested Data Table mapping(s).`);
+        this.aiMappingLoading.set(false);
+        this.loadMappings();
+        this.compare();
+      },
+      error: (response) => {
+        this.error.set(response?.error?.error ?? 'AI could not create Data Table mappings.');
+        this.aiMappingLoading.set(false);
+      },
     });
   }
 

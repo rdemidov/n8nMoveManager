@@ -71,7 +71,10 @@ public sealed record DataTableComparisonItem(
     string Name,
     string Status,
     int? SourceRowCount,
-    int? TargetRowCount);
+    int? TargetRowCount,
+    string? SourceTableId,
+    string? TargetTableId,
+    Guid? MappingId);
 
 public sealed record DataTableComparisonDto(
     string SourceEnvironmentKey,
@@ -97,3 +100,41 @@ public sealed record DataTablePromotionApplyResult(
     int StagedTablesCount,
     string? CommitSha,
     bool SkippedCommit);
+
+public sealed record DataTableMappingRequest(
+    string SourceEnvironmentKey,
+    string TargetEnvironmentKey,
+    string SourceTableId,
+    string TargetTableId);
+
+public sealed record DataTableMappingDto(
+    Guid Id,
+    string SourceEnvironmentKey,
+    string TargetEnvironmentKey,
+    string SourceTableId,
+    string SourceTableName,
+    string TargetTableId,
+    string TargetTableName,
+    DateTimeOffset UpdatedAt);
+
+public sealed record AiDataTableMappingRequest(
+    string SourceEnvironmentKey,
+    string TargetEnvironmentKey);
+
+public sealed record AiDataTableMappingResult(
+    string SourceEnvironmentKey,
+    string TargetEnvironmentKey,
+    int SuggestedMappingsCount,
+    int AppliedMappingsCount,
+    IReadOnlyList<AiDataTableMappingAppliedItem> Items,
+    IReadOnlyList<string> Warnings);
+
+public sealed record AiDataTableMappingAppliedItem(
+    string SourceTableId,
+    string TargetTableId,
+    string SourceTableName,
+    string TargetTableName,
+    string Reason,
+    string Confidence,
+    bool Applied,
+    string? SkippedReason);
