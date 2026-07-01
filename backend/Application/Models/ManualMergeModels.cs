@@ -80,6 +80,10 @@ public sealed record ManualMergeResultDto(
     WorkflowSemanticDiffDto SemanticDiffResultVsTarget,
     WorkflowSemanticDiffDto SemanticDiffResultVsSource);
 
+public sealed record ManualMergeDownload(
+    string FileName,
+    string WorkflowJson);
+
 public sealed record ManualMergeApplyRequest(
     bool Confirmation);
 

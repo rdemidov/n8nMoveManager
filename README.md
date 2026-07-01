@@ -11,7 +11,7 @@ The first run creates a **Local** environment with key `local` on branch `env/lo
 - Preview the difference between n8n and the Git snapshot, including node, connection, credential, and settings changes, then selectively sync remote workflows.
 - Export workflows from a local n8n Docker container or schedule API/Docker synchronization with Hangfire.
 - Browse commits, raw patches, and workflow-aware semantic diffs; edit commit messages and inspect or download files from a commit.
-- Compare environments, create promotion plans and baselines, preview merges, and resolve per-workflow conflicts in the manual merge assistant.
+- Compare environments, create promotion plans and baselines, preview merges, resolve per-workflow conflicts in the manual merge assistant, and download a validated merged workflow for later n8n import.
 - Inventory credential references, define logical credentials, map them per environment, and export remapped workflow snapshots without storing secrets.
 - Sync and compare n8n Data Table schemas, map environment-specific table IDs manually or with AI, stage promotion snapshots, and explicitly deploy selected schemas to a live target.
 - Preview and deploy selected workflows through the n8n API. Deployed workflows remain inactive.
@@ -180,7 +180,7 @@ Mappings are necessary because credential and Data Table IDs normally differ bet
 
 ### 6. Review and promote Git snapshots
 
-Open **Promotion**, choose different source and target environments, and generate the plan. Review semantic workflow changes, credential checks, warnings, and blocking errors. Use **Manual Merge** when a workflow needs conflict resolution, then preview and apply the approved changes to the target Git branch.
+Open **Promotion**, choose different source and target environments, and generate the plan. Review semantic workflow changes, credential checks, warnings, and blocking errors. Use **Manual Merge** when a workflow needs conflict resolution, then build the preview. A valid preview can either be applied to the target Git branch or downloaded with **Download for n8n** as `<workflow>-merged.json` for later import through the n8n UI or CLI. Downloading does not create a commit or change either environment.
 
 Promotion changes the managed Git snapshot only. It does not modify the live target n8n instance.
 
@@ -289,6 +289,7 @@ GET    /api/environments/{key}/semantic-diff/{commitSha}
 GET    /api/promotions/plan
 POST   /api/promotions/merge-preview
 POST   /api/promotions/apply
+GET    /api/manual-merge/session/{sessionId}/download
 POST   /api/workflows/deployment/preview
 POST   /api/workflows/deployment/deploy
 GET    /api/data-tables/mappings

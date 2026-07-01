@@ -235,6 +235,24 @@ public sealed class ManualWorkflowMergeServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DownloadReturnsImportableMergedWorkflowJson()
+    {
+        await SeedAsync(
+            source: Workflow("Source", Node("shared", "Shared", "n8n-nodes-base.set", """{"value":"source"}""")),
+            target: Workflow("Target", Node("shared", "Shared", "n8n-nodes-base.set", """{"value":"target"}""")));
+        var service = CreateService();
+        var session = await service.CreateSessionAsync(Request(), CancellationToken.None);
+
+        var download = await service.DownloadAsync(session.Id, CancellationToken.None);
+
+        Assert.Equal("manual-merged.json", download.FileName);
+        using var workflow = System.Text.Json.JsonDocument.Parse(download.WorkflowJson);
+        Assert.Equal("Target", workflow.RootElement.GetProperty("name").GetString());
+        Assert.Equal(System.Text.Json.JsonValueKind.Array, workflow.RootElement.GetProperty("nodes").ValueKind);
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, workflow.RootElement.GetProperty("connections").ValueKind);
+    }
+
+    [Fact]
     public async Task ApplyCreatesCommitOnTargetBranch()
     {
         await SeedAsync(

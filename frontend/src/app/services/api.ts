@@ -1229,6 +1229,10 @@ export class ApiService {
     return this.http.post<ManualMergeResult>(`${this.baseUrl}/manual-merge/session/${sessionId}/preview`, {});
   }
 
+  downloadManualMerge(sessionId: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/manual-merge/session/${sessionId}/download`, { responseType: 'blob' });
+  }
+
   applyManualMerge(sessionId: string): Observable<ManualMergeApplyResult> {
     return this.http.post<ManualMergeApplyResult>(`${this.baseUrl}/manual-merge/session/${sessionId}/apply`, { confirmation: true });
   }

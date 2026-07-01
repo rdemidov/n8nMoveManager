@@ -28,6 +28,7 @@ export class ManualMergeComponent implements OnInit {
   readonly saving = signal(false);
   readonly previewing = signal(false);
   readonly applying = signal(false);
+  readonly downloading = signal(false);
   readonly showJson = signal(false);
   readonly resultTab = signal<'target' | 'source' | 'nodes'>('target');
   readonly openedNodeKey = signal<string | null>(null);
@@ -193,6 +194,33 @@ export class ManualMergeComponent implements OnInit {
       error: (response) => {
         this.error.set(response?.error?.error ?? 'Could not apply manual merge.');
         this.applying.set(false);
+      },
+    });
+  }
+
+  download(): void {
+    const session = this.session();
+    if (!session || !this.preview() || this.blockingErrors().length > 0 || this.downloading()) {
+      return;
+    }
+
+    this.downloading.set(true);
+    this.error.set(null);
+    this.api.downloadManualMerge(session.id).subscribe({
+      next: (blob) => {
+        const sourceName = session.workflowFilePath.split(/[\\/]/).pop() ?? 'workflow.json';
+        const baseName = sourceName.replace(/\.json$/i, '');
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${baseName}-merged.json`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        this.downloading.set(false);
+      },
+      error: (response) => {
+        this.error.set(response?.error?.error ?? 'Could not download the merged workflow.');
+        this.downloading.set(false);
       },
     });
   }

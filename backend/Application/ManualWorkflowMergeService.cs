@@ -124,6 +124,22 @@ public sealed class ManualWorkflowMergeService
         return BuildResult(state, mappings);
     }
 
+    public async Task<ManualMergeDownload> DownloadAsync(string sessionId, CancellationToken cancellationToken)
+    {
+        var state = GetState(sessionId);
+        var mappings = await _mappingReader.GetMappingsAsync(state.SourceEnvironmentId, state.TargetEnvironmentId, cancellationToken);
+        var result = BuildResult(state, mappings);
+        if (result.BlockingErrors.Count > 0)
+        {
+            throw new WorkflowImportException(string.Join(Environment.NewLine, result.BlockingErrors));
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(state.WorkflowFilePath);
+        var invalidCharacters = Path.GetInvalidFileNameChars().ToHashSet();
+        var safeBaseName = new string(baseName.Select(character => invalidCharacters.Contains(character) ? '-' : character).ToArray());
+        return new ManualMergeDownload($"{safeBaseName}-merged.json", result.ResultWorkflowJson);
+    }
+
     public async Task<ManualMergeApplyResult> ApplyAsync(string sessionId, ManualMergeApplyRequest request, CancellationToken cancellationToken)
     {
         if (!request.Confirmation)

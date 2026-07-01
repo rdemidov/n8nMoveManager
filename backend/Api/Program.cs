@@ -1339,6 +1339,22 @@ api.MapPost("/manual-merge/session/{sessionId}/preview", async (
     }
 });
 
+api.MapGet("/manual-merge/session/{sessionId}/download", async (
+    string sessionId,
+    ManualWorkflowMergeService manualMergeService,
+    CancellationToken cancellationToken) =>
+{
+    try
+    {
+        var download = await manualMergeService.DownloadAsync(sessionId, cancellationToken);
+        return Results.File(Encoding.UTF8.GetBytes(download.WorkflowJson), "application/json", download.FileName);
+    }
+    catch (WorkflowImportException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+});
+
 api.MapPost("/manual-merge/session/{sessionId}/apply", async (
     string sessionId,
     ManualMergeApplyRequest request,
